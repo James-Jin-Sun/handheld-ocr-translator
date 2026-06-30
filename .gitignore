@@ -1,0 +1,4 @@
+.venv/
+laptop_mvp/__pycache__/
+laptop_mvp/ocr_results_cropped/
+laptop_mvp/ocr_results_whole_image/

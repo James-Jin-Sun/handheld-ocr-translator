@@ -1,7 +1,14 @@
 import statistics
 import time
 
-from config import MODE_CROPPED, MODE_WHOLE_IMAGE, current_timestamp, parse_args
+from config import (
+    MODE_CROPPED,
+    MODE_CROPPED_BORDER,
+    MODE_PSM11_CONFIDENCE,
+    MODE_WHOLE_IMAGE,
+    current_timestamp,
+    parse_args,
+)
 from dataset import find_images
 from ground_truth import (
     get_ground_truth,
@@ -11,7 +18,12 @@ from ground_truth import (
     load_json_ground_truth,
 )
 from metrics import edit_distance, error_rate
-from ocr import configure_tesseract, ocr_gt_crops, ocr_whole_image
+from ocr import (
+    configure_tesseract,
+    ocr_gt_crops,
+    ocr_psm11_confidence,
+    ocr_whole_image,
+)
 from results import save_prediction_text, save_results
 
 
@@ -34,19 +46,42 @@ def resolve_image_ground_truth(image_path, records, json_ground_truth, gt_dir):
 
 
 def run_ocr_for_image(image_path, records, config):
-    if config.mode == MODE_WHOLE_IMAGE or not records:
+    if config.mode == MODE_WHOLE_IMAGE:
         prediction, runtime_seconds = ocr_whole_image(
             image_path,
             config.tesseract_config,
         )
-        return prediction, runtime_seconds, [], MODE_WHOLE_IMAGE
+        return prediction, runtime_seconds, [], [], MODE_WHOLE_IMAGE
+
+    if config.mode == MODE_PSM11_CONFIDENCE:
+        prediction, runtime_seconds, confidence_rows = ocr_psm11_confidence(
+            image_path,
+            config,
+        )
+        return prediction, runtime_seconds, [], confidence_rows, MODE_PSM11_CONFIDENCE
+
+    if not records:
+        prediction, runtime_seconds = ocr_whole_image(
+            image_path,
+            config.tesseract_config,
+        )
+        return prediction, runtime_seconds, [], [], MODE_WHOLE_IMAGE
+
+    if config.mode == MODE_CROPPED_BORDER:
+        prediction, runtime_seconds, crop_rows = ocr_gt_crops(
+            image_path,
+            records,
+            config,
+            with_border=True,
+        )
+        return prediction, runtime_seconds, crop_rows, [], MODE_CROPPED_BORDER
 
     prediction, runtime_seconds, crop_rows = ocr_gt_crops(
         image_path,
         records,
         config,
     )
-    return prediction, runtime_seconds, crop_rows, MODE_CROPPED
+    return prediction, runtime_seconds, crop_rows, [], MODE_CROPPED
 
 
 def build_summary(config, rows, totals, test_started_at, wall_clock_seconds):
@@ -98,6 +133,7 @@ def evaluate(config):
     config.output_dir.mkdir(parents=True, exist_ok=True)
     rows = []
     crop_rows = []
+    confidence_rows = []
     totals = {"char_edits": 0, "chars": 0, "word_edits": 0, "words": 0}
     test_started_at = config.run_started_at
     wall_clock_start = time.perf_counter()
@@ -110,7 +146,13 @@ def evaluate(config):
             json_ground_truth,
             gt_dir,
         )
-        prediction, runtime_seconds, image_crop_rows, method = run_ocr_for_image(
+        (
+            prediction,
+            runtime_seconds,
+            image_crop_rows,
+            image_confidence_rows,
+            method,
+        ) = run_ocr_for_image(
             image_path,
             records,
             config,
@@ -121,6 +163,7 @@ def evaluate(config):
             prediction,
         )
         crop_rows.extend(image_crop_rows)
+        confidence_rows.extend(image_confidence_rows)
 
         metrics = image_metrics(ground_truth, prediction)
         totals["char_edits"] += metrics["char_edits"]
@@ -135,6 +178,10 @@ def evaluate(config):
                 "method": method,
                 "gt_file": str(gt_file) if gt_file else "",
                 "crop_count": len(records),
+                "confidence_token_count": len(image_confidence_rows),
+                "kept_confidence_token_count": sum(
+                    1 for row in image_confidence_rows if row["kept"]
+                ),
                 "ground_truth": ground_truth,
                 "prediction": prediction,
                 "prediction_file": str(prediction_path),
@@ -152,7 +199,7 @@ def evaluate(config):
 
     wall_clock_seconds = time.perf_counter() - wall_clock_start
     summary = build_summary(config, rows, totals, test_started_at, wall_clock_seconds)
-    save_results(config.output_dir, rows, crop_rows, summary)
+    save_results(config.output_dir, rows, crop_rows, confidence_rows, summary)
     return summary
 
 

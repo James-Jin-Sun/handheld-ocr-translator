@@ -10,12 +10,14 @@ def save_prediction_text(output_dir, image_path, prediction):
     return prediction_path
 
 
-def save_results(output_dir, rows, crop_rows, summary):
+def save_results(output_dir, rows, crop_rows, confidence_rows, summary):
     summary_path = output_dir / "summary.json"
     details_json_path = output_dir / "per_image_results.json"
     details_csv_path = output_dir / "per_image_results.csv"
     crop_json_path = output_dir / "per_crop_results.json"
     crop_csv_path = output_dir / "per_crop_results.csv"
+    confidence_json_path = output_dir / "per_confidence_token_results.json"
+    confidence_csv_path = output_dir / "per_confidence_token_results.csv"
 
     summary_path.write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
@@ -41,6 +43,16 @@ def save_results(output_dir, rows, crop_rows, summary):
             writer.writeheader()
             writer.writerows(crop_rows)
 
+    if confidence_rows:
+        confidence_json_path.write_text(
+            json.dumps(confidence_rows, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        with confidence_csv_path.open("w", encoding="utf-8", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=confidence_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(confidence_rows)
+
     print("\nSaved results:")
     print(f"- {summary_path}")
     print(f"- {details_json_path}")
@@ -50,3 +62,6 @@ def save_results(output_dir, rows, crop_rows, summary):
         print(f"- {crop_json_path}")
         print(f"- {crop_csv_path}")
         print(f"- {output_dir / 'crops'}")
+    if confidence_rows:
+        print(f"- {confidence_json_path}")
+        print(f"- {confidence_csv_path}")

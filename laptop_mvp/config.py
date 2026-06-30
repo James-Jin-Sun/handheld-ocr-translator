@@ -6,7 +6,9 @@ from typing import Optional
 
 
 MODE_CROPPED = "gt_bbox_crops"
+MODE_CROPPED_BORDER = "gt_bbox_crops_border"
 MODE_WHOLE_IMAGE = "whole_image"
+MODE_PSM11_CONFIDENCE = "psm11_confidence"
 
 
 @dataclass
@@ -20,9 +22,14 @@ class EvaluationConfig:
     tesseract_cmd: Optional[str]
     tesseract_config: str
     crop_tesseract_config: str
+    crop_border_tesseract_config: str
+    confidence_tesseract_config: str
+    confidence_threshold: float
     crop_padding: int
     crop_scale: float
     min_crop_height: int
+    crop_border_pixels: int
+    crop_border_color: str
     run_started_at: str
 
     def summary_config(self):
@@ -65,7 +72,9 @@ def resolve_default_paths():
         "json_gt": dataset_root / "test_gt.json",
         "gt_dir": gt_dir,
         "cropped_output_dir": script_dir / "ocr_results_cropped",
+        "cropped_border_output_dir": script_dir / "ocr_results_cropped_border",
         "whole_image_output_dir": script_dir / "ocr_results_whole_image",
+        "psm11_confidence_output_dir": script_dir / "ocr_results_psm11_confidence",
     }
 
 
@@ -77,9 +86,17 @@ def parse_args():
     )
     parser.add_argument(
         "--mode",
-        choices=[MODE_CROPPED, MODE_WHOLE_IMAGE],
+        choices=[
+            MODE_CROPPED,
+            MODE_CROPPED_BORDER,
+            MODE_WHOLE_IMAGE,
+            MODE_PSM11_CONFIDENCE,
+        ],
         default=MODE_CROPPED,
-        help="Run GT-bbox cropped OCR or whole-image OCR.",
+        help=(
+            "Run GT-bbox cropped OCR, cropped OCR with border, whole-image OCR, "
+            "or PSM 11 confidence-filtered OCR."
+        ),
     )
     parser.add_argument(
         "--whole-image",
@@ -114,6 +131,33 @@ def parse_args():
         default="--psm 8",
         help="Config used for each cropped text region.",
     )
+    parser.add_argument(
+        "--crop-border-tesseract-config",
+        default="--psm 8",
+        help="Config used for cropped text regions after adding a border.",
+    )
+    parser.add_argument(
+        "--crop-border-pixels",
+        type=int,
+        default=20,
+        help="White border size, in pixels, added around resized crops.",
+    )
+    parser.add_argument(
+        "--crop-border-color",
+        default="white",
+        help="Border color added around resized crops.",
+    )
+    parser.add_argument(
+        "--confidence-tesseract-config",
+        default="--psm 11",
+        help="Config used for confidence-filtered OCR.",
+    )
+    parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=60.0,
+        help="Minimum Tesseract confidence score kept in confidence-filtered OCR.",
+    )
 
     args = parser.parse_args()
     mode = MODE_WHOLE_IMAGE if args.whole_image else args.mode
@@ -121,6 +165,10 @@ def parse_args():
         output_dir = args.output_dir
     elif mode == MODE_WHOLE_IMAGE:
         output_dir = defaults["whole_image_output_dir"]
+    elif mode == MODE_PSM11_CONFIDENCE:
+        output_dir = defaults["psm11_confidence_output_dir"]
+    elif mode == MODE_CROPPED_BORDER:
+        output_dir = defaults["cropped_border_output_dir"]
     else:
         output_dir = defaults["cropped_output_dir"]
 
@@ -134,8 +182,13 @@ def parse_args():
         tesseract_cmd=args.tesseract_cmd,
         tesseract_config=args.tesseract_config,
         crop_tesseract_config=args.crop_tesseract_config,
+        crop_border_tesseract_config=args.crop_border_tesseract_config,
+        confidence_tesseract_config=args.confidence_tesseract_config,
+        confidence_threshold=args.confidence_threshold,
         crop_padding=args.crop_padding,
         crop_scale=args.crop_scale,
         min_crop_height=args.min_crop_height,
+        crop_border_pixels=args.crop_border_pixels,
+        crop_border_color=args.crop_border_color,
         run_started_at=current_timestamp(),
     )

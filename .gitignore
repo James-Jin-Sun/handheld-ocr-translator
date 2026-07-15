@@ -4,3 +4,7 @@ laptop_mvp/ocr_results_cropped/
 laptop_mvp/ocr_results_cropped_border/
 laptop_mvp/ocr_results_whole_image/
 laptop_mvp/ocr_results_psm11_confidence/
+laptop_mvp/ocr_results_easyocr_simple/
+laptop_mvp/ocr_results_easyocr_paragraph/
+laptop_mvp/ocr_results_easyocr_detection/
+laptop_mvp/.EasyOCR/

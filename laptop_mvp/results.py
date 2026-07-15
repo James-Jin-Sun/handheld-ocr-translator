@@ -10,7 +10,18 @@ def save_prediction_text(output_dir, image_path, prediction):
     return prediction_path
 
 
-def save_results(output_dir, rows, crop_rows, confidence_rows, summary):
+def save_results(
+    output_dir,
+    rows,
+    crop_rows,
+    confidence_rows,
+    summary,
+    region_rows=None,
+    detection_rows=None,
+):
+    region_rows = region_rows or []
+    detection_rows = detection_rows or []
+
     summary_path = output_dir / "summary.json"
     details_json_path = output_dir / "per_image_results.json"
     details_csv_path = output_dir / "per_image_results.csv"
@@ -18,6 +29,10 @@ def save_results(output_dir, rows, crop_rows, confidence_rows, summary):
     crop_csv_path = output_dir / "per_crop_results.csv"
     confidence_json_path = output_dir / "per_confidence_token_results.json"
     confidence_csv_path = output_dir / "per_confidence_token_results.csv"
+    region_json_path = output_dir / "per_region_results.json"
+    region_csv_path = output_dir / "per_region_results.csv"
+    detection_json_path = output_dir / "per_detection_results.json"
+    detection_csv_path = output_dir / "per_detection_results.csv"
 
     summary_path.write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
@@ -53,6 +68,26 @@ def save_results(output_dir, rows, crop_rows, confidence_rows, summary):
             writer.writeheader()
             writer.writerows(confidence_rows)
 
+    if region_rows:
+        region_json_path.write_text(
+            json.dumps(region_rows, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        with region_csv_path.open("w", encoding="utf-8", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=region_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(region_rows)
+
+    if detection_rows:
+        detection_json_path.write_text(
+            json.dumps(detection_rows, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        with detection_csv_path.open("w", encoding="utf-8", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=detection_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(detection_rows)
+
     print("\nSaved results:")
     print(f"- {summary_path}")
     print(f"- {details_json_path}")
@@ -65,3 +100,9 @@ def save_results(output_dir, rows, crop_rows, confidence_rows, summary):
     if confidence_rows:
         print(f"- {confidence_json_path}")
         print(f"- {confidence_csv_path}")
+    if region_rows:
+        print(f"- {region_json_path}")
+        print(f"- {region_csv_path}")
+    if detection_rows:
+        print(f"- {detection_json_path}")
+        print(f"- {detection_csv_path}")

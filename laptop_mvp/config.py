@@ -9,6 +9,9 @@ MODE_CROPPED = "gt_bbox_crops"
 MODE_CROPPED_BORDER = "gt_bbox_crops_border"
 MODE_WHOLE_IMAGE = "whole_image"
 MODE_PSM11_CONFIDENCE = "psm11_confidence"
+MODE_EASYOCR_SIMPLE = "easyocr_simple"
+MODE_EASYOCR_PARAGRAPH = "easyocr_paragraph"
+MODE_EASYOCR_DETECTION = "easyocr_detection"
 
 
 @dataclass
@@ -30,6 +33,9 @@ class EvaluationConfig:
     min_crop_height: int
     crop_border_pixels: int
     crop_border_color: str
+    easyocr_languages: tuple
+    easyocr_gpu: bool
+    detection_iou_threshold: float
     run_started_at: str
 
     def summary_config(self):
@@ -75,6 +81,9 @@ def resolve_default_paths():
         "cropped_border_output_dir": script_dir / "ocr_results_cropped_border",
         "whole_image_output_dir": script_dir / "ocr_results_whole_image",
         "psm11_confidence_output_dir": script_dir / "ocr_results_psm11_confidence",
+        "easyocr_simple_output_dir": script_dir / "ocr_results_easyocr_simple",
+        "easyocr_paragraph_output_dir": script_dir / "ocr_results_easyocr_paragraph",
+        "easyocr_detection_output_dir": script_dir / "ocr_results_easyocr_detection",
     }
 
 
@@ -91,11 +100,15 @@ def parse_args():
             MODE_CROPPED_BORDER,
             MODE_WHOLE_IMAGE,
             MODE_PSM11_CONFIDENCE,
+            MODE_EASYOCR_SIMPLE,
+            MODE_EASYOCR_PARAGRAPH,
+            MODE_EASYOCR_DETECTION,
         ],
         default=MODE_CROPPED,
         help=(
             "Run GT-bbox cropped OCR, cropped OCR with border, whole-image OCR, "
-            "or PSM 11 confidence-filtered OCR."
+            "PSM 11 confidence-filtered OCR, EasyOCR simple mode, EasyOCR "
+            "paragraph mode, or EasyOCR detection-first mode."
         ),
     )
     parser.add_argument(
@@ -158,6 +171,22 @@ def parse_args():
         default=60.0,
         help="Minimum Tesseract confidence score kept in confidence-filtered OCR.",
     )
+    parser.add_argument(
+        "--easyocr-langs",
+        default="en",
+        help="Comma-separated EasyOCR language codes, e.g. `en` or `en,fr`.",
+    )
+    parser.add_argument(
+        "--easyocr-gpu",
+        action="store_true",
+        help="Use GPU for EasyOCR if a CUDA-enabled torch build is available.",
+    )
+    parser.add_argument(
+        "--detection-iou-threshold",
+        type=float,
+        default=0.5,
+        help="Minimum IoU for an EasyOCR detected box to count as a GT match.",
+    )
 
     args = parser.parse_args()
     mode = MODE_WHOLE_IMAGE if args.whole_image else args.mode
@@ -169,8 +198,18 @@ def parse_args():
         output_dir = defaults["psm11_confidence_output_dir"]
     elif mode == MODE_CROPPED_BORDER:
         output_dir = defaults["cropped_border_output_dir"]
+    elif mode == MODE_EASYOCR_SIMPLE:
+        output_dir = defaults["easyocr_simple_output_dir"]
+    elif mode == MODE_EASYOCR_PARAGRAPH:
+        output_dir = defaults["easyocr_paragraph_output_dir"]
+    elif mode == MODE_EASYOCR_DETECTION:
+        output_dir = defaults["easyocr_detection_output_dir"]
     else:
         output_dir = defaults["cropped_output_dir"]
+
+    easyocr_languages = tuple(
+        lang.strip() for lang in args.easyocr_langs.split(",") if lang.strip()
+    ) or ("en",)
 
     return EvaluationConfig(
         image_dir=args.image_dir,
@@ -190,5 +229,8 @@ def parse_args():
         min_crop_height=args.min_crop_height,
         crop_border_pixels=args.crop_border_pixels,
         crop_border_color=args.crop_border_color,
+        easyocr_languages=easyocr_languages,
+        easyocr_gpu=args.easyocr_gpu,
+        detection_iou_threshold=args.detection_iou_threshold,
         run_started_at=current_timestamp(),
     )

@@ -22,11 +22,18 @@ def blur_region(image, bbox, radius=DEFAULT_BLUR_RADIUS):
     return image
 
 
+# Microsoft YaHei / SimHei render both Latin and CJK glyphs (needed for
+# Chinese translations); Arial is a Latin-only fallback.
+_FONT_CANDIDATES = ("msyh.ttc", "simhei.ttf", "arial.ttf")
+
+
 def _load_font(size):
-    try:
-        return ImageFont.truetype("arial.ttf", size)
-    except OSError:
-        return ImageFont.load_default()
+    for font_name in _FONT_CANDIDATES:
+        try:
+            return ImageFont.truetype(font_name, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
 
 
 def draw_text_over_region(
@@ -67,6 +74,53 @@ def draw_text_over_region(
     image = image.convert("RGBA")
     image.alpha_composite(overlay)
     return image.convert("RGB")
+
+
+def split_text_across_lines(text, weights):
+    """Split `text` into `len(weights)` segments whose lengths are roughly
+    proportional to `weights` (e.g. the original lines' text lengths), so a
+    block-level translation can be laid back out over the original lines.
+
+    When the text contains spaces (word-based target languages) the cut
+    points snap to the nearest space; otherwise (e.g. Chinese) they fall at
+    character boundaries.
+    """
+    if not weights:
+        return []
+    if len(weights) == 1:
+        return [text]
+
+    total_weight = sum(weights)
+    if total_weight <= 0:
+        weights = [1] * len(weights)
+        total_weight = len(weights)
+
+    text_length = len(text)
+    cut_points = []
+    cumulative = 0
+    for weight in weights[:-1]:
+        cumulative += weight
+        cut_points.append(round(text_length * cumulative / total_weight))
+
+    if " " in text:
+        snapped = []
+        for cut in cut_points:
+            space_before = text.rfind(" ", 0, cut + 1)
+            space_after = text.find(" ", cut)
+            candidates = [pos for pos in (space_before, space_after) if pos != -1]
+            if candidates:
+                cut = min(candidates, key=lambda pos: abs(pos - cut))
+            snapped.append(cut)
+        cut_points = snapped
+
+    segments = []
+    previous = 0
+    for cut in cut_points:
+        cut = max(previous, min(cut, text_length))
+        segments.append(text[previous:cut].strip())
+        previous = cut
+    segments.append(text[previous:].strip())
+    return segments
 
 
 def blur_and_overlay(image, regions, blur_radius=DEFAULT_BLUR_RADIUS):

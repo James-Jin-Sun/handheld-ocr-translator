@@ -1,63 +1,69 @@
-"""Thin wrapper around the Google Cloud Translation API.
+"""Wrapper around the Google Cloud Translation API - Advanced (v3).
 
-Requires the `google-cloud-translate` package and a service-account key:
+Uses the built-in `general/nmt` model and Application Default Credentials
+(ADC) from an OAuth user login (`gcloud auth application-default login`) --
+no API key or service-account JSON file needed. Run once per machine:
 
-    pip install google-cloud-translate
-
-By default, the key is looked up at `laptop_mvp/keys/google-translate-key.json`
-(see `default_credentials_path`). You can override this by setting the
-`GOOGLE_APPLICATION_CREDENTIALS` environment variable to a different path.
-
-Never commit the key file to GitHub -- `laptop_mvp/keys/` is git-ignored.
+    gcloud auth application-default login
+    gcloud config set project handheld-ocr-translator
 """
 
-import os
 from functools import lru_cache
-from pathlib import Path
 
 try:
-    from google.cloud import translate_v2 as translate
+    from google.cloud import translate_v3 as translate
 except ImportError as exc:
     raise SystemExit(
         "Missing dependency: install it with `pip install google-cloud-translate`."
     ) from exc
 
 
-def default_credentials_path():
-    """Default service-account key location: laptop_mvp/keys/google-translate-key.json."""
-    return Path(__file__).resolve().parents[2] / "keys" / "google-translate-key.json"
-
-
-def _ensure_credentials_env():
-    if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
-        return
-
-    key_path = default_credentials_path()
-    if key_path.exists():
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(key_path)
+DEFAULT_PROJECT_ID = "handheld-ocr-translator"
+DEFAULT_LOCATION = "global"
+DEFAULT_TARGET_LANGUAGE = "zh-CN"  # Simplified Chinese
 
 
 @lru_cache(maxsize=1)
 def get_client():
-    _ensure_credentials_env()
-    return translate.Client()
+    return translate.TranslationServiceClient()
 
 
-def translate_text(text, target_language="en", source_language=None):
-    """Translate a single string. Returns "" for empty/whitespace-only input."""
+def _parent(project_id):
+    return f"projects/{project_id}/locations/{DEFAULT_LOCATION}"
+
+
+def _model_path(project_id):
+    return f"{_parent(project_id)}/models/general/nmt"
+
+
+def translate_text(
+    text,
+    target_language=DEFAULT_TARGET_LANGUAGE,
+    source_language=None,
+    project_id=DEFAULT_PROJECT_ID,
+):
+    """Translate a single string with the general/nmt model. Returns "" for empty input."""
     if not text or not text.strip():
         return ""
 
     client = get_client()
-    result = client.translate(
-        text,
-        target_language=target_language,
-        source_language=source_language,
+    response = client.translate_text(
+        contents=[text],
+        target_language_code=target_language,
+        source_language_code=source_language,
+        parent=_parent(project_id),
+        model=_model_path(project_id),
+        mime_type="text/plain",
     )
-    return result["translatedText"]
+    return response.translations[0].translated_text
 
 
-def translate_batch(texts, target_language="en", source_language=None):
+def translate_batch(
+    texts,
+    target_language=DEFAULT_TARGET_LANGUAGE,
+    source_language=None,
+    project_id=DEFAULT_PROJECT_ID,
+):
     """Translate a list of strings in one API call, preserving order and
     passing empty strings through untouched."""
     non_empty_indices = [index for index, text in enumerate(texts) if text and text.strip()]
@@ -67,12 +73,15 @@ def translate_batch(texts, target_language="en", source_language=None):
         return translations
 
     client = get_client()
-    results = client.translate(
-        [texts[index] for index in non_empty_indices],
-        target_language=target_language,
-        source_language=source_language,
+    response = client.translate_text(
+        contents=[texts[index] for index in non_empty_indices],
+        target_language_code=target_language,
+        source_language_code=source_language,
+        parent=_parent(project_id),
+        model=_model_path(project_id),
+        mime_type="text/plain",
     )
-    for index, result in zip(non_empty_indices, results):
-        translations[index] = result["translatedText"]
+    for index, translation in zip(non_empty_indices, response.translations):
+        translations[index] = translation.translated_text
 
     return translations

@@ -10,8 +10,6 @@ laptop_mvp/src/ocr/ocr_results_easyocr_detection/
 laptop_mvp/src/ocr/ocr_results_paddleocr_simple/
 laptop_mvp/src/ocr/ocr_results_paddleocr_detection/
 laptop_mvp/.EasyOCR/
-
-# Secrets: never upload API keys to GitHub.
-laptop_mvp/keys/*
-!laptop_mvp/keys/.gitkeep
-!laptop_mvp/keys/README.md
+laptop_mvp/src/translation/test_output/
+laptop_mvp/src/overlay/test_output/
+laptop_mvp/src/pipeline_results/

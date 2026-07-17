@@ -7,4 +7,6 @@ laptop_mvp/ocr_results_psm11_confidence/
 laptop_mvp/ocr_results_easyocr_simple/
 laptop_mvp/ocr_results_easyocr_paragraph/
 laptop_mvp/ocr_results_easyocr_detection/
+laptop_mvp/ocr_results_paddleocr_simple/
+laptop_mvp/ocr_results_paddleocr_detection/
 laptop_mvp/.EasyOCR/

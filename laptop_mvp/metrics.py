@@ -33,6 +33,18 @@ def safe_divide(numerator, denominator):
     return numerator / denominator if denominator else 0.0
 
 
+def polygon_to_bbox(polygon):
+    """Convert a 4+ point polygon (e.g. [[x, y], ...]) to an (x1, y1, x2, y2) box."""
+    x_values = [point[0] for point in polygon]
+    y_values = [point[1] for point in polygon]
+    return (
+        int(min(x_values)),
+        int(min(y_values)),
+        int(max(x_values)),
+        int(max(y_values)),
+    )
+
+
 def compute_iou(box_a, box_b):
     ax1, ay1, ax2, ay2 = box_a
     bx1, by1, bx2, by2 = box_b

@@ -12,6 +12,8 @@ MODE_PSM11_CONFIDENCE = "psm11_confidence"
 MODE_EASYOCR_SIMPLE = "easyocr_simple"
 MODE_EASYOCR_PARAGRAPH = "easyocr_paragraph"
 MODE_EASYOCR_DETECTION = "easyocr_detection"
+MODE_PADDLEOCR_SIMPLE = "paddleocr_simple"
+MODE_PADDLEOCR_DETECTION = "paddleocr_detection"
 
 
 @dataclass
@@ -35,6 +37,8 @@ class EvaluationConfig:
     crop_border_color: str
     easyocr_languages: tuple
     easyocr_gpu: bool
+    paddleocr_lang: str
+    paddleocr_gpu: bool
     detection_iou_threshold: float
     run_started_at: str
 
@@ -84,6 +88,8 @@ def resolve_default_paths():
         "easyocr_simple_output_dir": script_dir / "ocr_results_easyocr_simple",
         "easyocr_paragraph_output_dir": script_dir / "ocr_results_easyocr_paragraph",
         "easyocr_detection_output_dir": script_dir / "ocr_results_easyocr_detection",
+        "paddleocr_simple_output_dir": script_dir / "ocr_results_paddleocr_simple",
+        "paddleocr_detection_output_dir": script_dir / "ocr_results_paddleocr_detection",
     }
 
 
@@ -103,12 +109,15 @@ def parse_args():
             MODE_EASYOCR_SIMPLE,
             MODE_EASYOCR_PARAGRAPH,
             MODE_EASYOCR_DETECTION,
+            MODE_PADDLEOCR_SIMPLE,
+            MODE_PADDLEOCR_DETECTION,
         ],
         default=MODE_CROPPED,
         help=(
             "Run GT-bbox cropped OCR, cropped OCR with border, whole-image OCR, "
             "PSM 11 confidence-filtered OCR, EasyOCR simple mode, EasyOCR "
-            "paragraph mode, or EasyOCR detection-first mode."
+            "paragraph mode, EasyOCR detection-first mode, PaddleOCR simple "
+            "mode, or PaddleOCR detection-first mode."
         ),
     )
     parser.add_argument(
@@ -185,7 +194,17 @@ def parse_args():
         "--detection-iou-threshold",
         type=float,
         default=0.5,
-        help="Minimum IoU for an EasyOCR detected box to count as a GT match.",
+        help="Minimum IoU for a detected box (EasyOCR or PaddleOCR) to count as a GT match.",
+    )
+    parser.add_argument(
+        "--paddleocr-lang",
+        default="en",
+        help="PaddleOCR language code, e.g. `en` or `ch`.",
+    )
+    parser.add_argument(
+        "--paddleocr-gpu",
+        action="store_true",
+        help="Use GPU for PaddleOCR if a CUDA-enabled paddlepaddle build is available.",
     )
 
     args = parser.parse_args()
@@ -204,6 +223,10 @@ def parse_args():
         output_dir = defaults["easyocr_paragraph_output_dir"]
     elif mode == MODE_EASYOCR_DETECTION:
         output_dir = defaults["easyocr_detection_output_dir"]
+    elif mode == MODE_PADDLEOCR_SIMPLE:
+        output_dir = defaults["paddleocr_simple_output_dir"]
+    elif mode == MODE_PADDLEOCR_DETECTION:
+        output_dir = defaults["paddleocr_detection_output_dir"]
     else:
         output_dir = defaults["cropped_output_dir"]
 
@@ -231,6 +254,8 @@ def parse_args():
         crop_border_color=args.crop_border_color,
         easyocr_languages=easyocr_languages,
         easyocr_gpu=args.easyocr_gpu,
+        paddleocr_lang=args.paddleocr_lang,
+        paddleocr_gpu=args.paddleocr_gpu,
         detection_iou_threshold=args.detection_iou_threshold,
         run_started_at=current_timestamp(),
     )

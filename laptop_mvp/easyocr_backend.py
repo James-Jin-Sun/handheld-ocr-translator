@@ -25,7 +25,7 @@ except ImportError as exc:
         "Missing dependency: install easyocr with `pip install easyocr`."
     ) from exc
 
-from metrics import detection_prf, match_boxes_by_iou, normalize_text
+from metrics import detection_prf, match_boxes_by_iou, normalize_text, polygon_to_bbox
 from ocr import crop_text_region
 
 
@@ -41,17 +41,6 @@ def reader_for(config):
 def load_image_array(image_path):
     with Image.open(image_path) as image:
         return np.array(image.convert("RGB"))
-
-
-def polygon_to_bbox(polygon):
-    x_values = [point[0] for point in polygon]
-    y_values = [point[1] for point in polygon]
-    return (
-        int(min(x_values)),
-        int(min(y_values)),
-        int(max(x_values)),
-        int(max(y_values)),
-    )
 
 
 _NUMERIC_TYPES = (int, float, np.integer, np.floating)

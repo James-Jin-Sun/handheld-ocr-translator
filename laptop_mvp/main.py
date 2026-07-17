@@ -7,6 +7,8 @@ from config import (
     MODE_EASYOCR_DETECTION,
     MODE_EASYOCR_PARAGRAPH,
     MODE_EASYOCR_SIMPLE,
+    MODE_PADDLEOCR_DETECTION,
+    MODE_PADDLEOCR_SIMPLE,
     MODE_PSM11_CONFIDENCE,
     MODE_WHOLE_IMAGE,
     current_timestamp,
@@ -106,6 +108,28 @@ def run_ocr_for_image(image_path, records, config):
             ocr_easyocr_detection(image_path, records, config)
         )
         result = empty_ocr_result(prediction, runtime_seconds, MODE_EASYOCR_DETECTION)
+        result["crop_rows"] = crop_rows
+        result["detection_metrics"] = detection_metrics
+        return result
+
+    if config.mode == MODE_PADDLEOCR_SIMPLE:
+        from paddleocr_backend import ocr_paddleocr_simple
+
+        prediction, runtime_seconds, region_rows = ocr_paddleocr_simple(
+            image_path,
+            config,
+        )
+        result = empty_ocr_result(prediction, runtime_seconds, MODE_PADDLEOCR_SIMPLE)
+        result["region_rows"] = region_rows
+        return result
+
+    if config.mode == MODE_PADDLEOCR_DETECTION:
+        from paddleocr_backend import ocr_paddleocr_detection
+
+        prediction, runtime_seconds, crop_rows, detection_metrics = (
+            ocr_paddleocr_detection(image_path, records, config)
+        )
+        result = empty_ocr_result(prediction, runtime_seconds, MODE_PADDLEOCR_DETECTION)
         result["crop_rows"] = crop_rows
         result["detection_metrics"] = detection_metrics
         return result

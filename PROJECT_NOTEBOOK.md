@@ -92,6 +92,57 @@ Use this file to track what was done, what results were observed, and what shoul
 - Add a comparison script/table across all `summary.json` files (Tesseract + EasyOCR) for a single ranked view.
 - Consider testing EasyOCR with GPU (`--easyocr-gpu`) if a CUDA machine becomes available, since CPU runtime is the main practical downside today.
 
+## 2026-07-16
+
+### Work Done
+
+- Added PaddleOCR as a third OCR engine, using the modern PaddleOCR 3.x module API (`PaddleOCR`, `TextDetection`, `TextRecognition`).
+- Added `paddleocr_simple` mode (full PP-OCRv6 detect+recognize pipeline via `PaddleOCR().predict()`), saved to `ocr_results_paddleocr_simple/`.
+- Added `paddleocr_detection` mode: runs PaddleOCR's own `TextDetection` detector first, matches detected boxes to GT boxes by IoU (same matcher used for EasyOCR), then recognizes all detected crops in one batched `TextRecognition().predict()` call; saved to `ocr_results_paddleocr_detection/` with `detection_summary` in `summary.json`.
+- Refactored `polygon_to_bbox` out of `easyocr_backend.py` into `metrics.py` so the new `paddleocr_backend.py` doesn't need to import (and therefore install) EasyOCR/torch.
+- Installed `paddleocr` + `paddlepaddle` into `.venv`; hit a known PaddlePaddle 3.3.1 + oneDNN CPU bug (`ConvertPirAttribute2RuntimeAttribute not support`) and fixed it by pinning `paddlepaddle==3.2.2`.
+
+### Results
+
+- All results on the same first 50 ICDAR2013 test images, CPU only:
+- `paddleocr_simple`:
+  - CER: `0.2474`
+  - WER: `0.4487`
+  - Average OCR runtime per image: `54.14s` (see caveat below)
+  - Wall-clock test time: `2717.55s`
+- `paddleocr_detection` (IoU threshold `0.5`):
+  - CER: `0.6979`
+  - WER: `0.8886`
+  - Average OCR runtime per image: `36.02s` (see caveat below)
+  - Wall-clock test time: `1938.27s`
+  - Detection precision: `0.4720`, recall: `0.2962`, F1: `0.3640`, mean IoU (matched boxes): `0.6693`
+- Method comparison so far (same 50 images):
+
+| Method | CER | WER |
+|---|---|---|
+| `gt_bbox_crops` (Tesseract, best) | 0.1800 | 0.5103 |
+| `paddleocr_simple` | 0.2474 | **0.4487** |
+| `easyocr_paragraph` | 0.2845 | 0.6628 |
+| `easyocr_detection` | 0.3017 | 0.6833 |
+| `easyocr_simple` | 0.3030 | 0.6745 |
+| `paddleocr_detection` | 0.6979 | 0.8886 |
+
+- `paddleocr_simple` has the best WER of any method tried so far (even beating Tesseract's `gt_bbox_crops`), and is clearly the strongest of the three "detect on raw image, no GT boxes" methods (EasyOCR + PaddleOCR).
+
+### Notes
+
+- **Runtime caveat**: both 50-image PaddleOCR runs hit heavy system memory/swap pressure partway through (per-image runtime varied wildly, from ~5s up to 600+s on the same run); the reported average runtimes are not a fair speed comparison and should be re-measured on a less loaded machine before drawing conclusions about PaddleOCR speed.
+- PaddleOCR's standalone `TextDetection` module recall (`0.30`) is notably lower than EasyOCR's own detector recall (`0.49`) on this dataset, causing `paddleocr_detection`'s CER/WER to be much worse than `paddleocr_simple`'s full pipeline — the standalone detector's default thresholds appear to miss more small/word-level GT boxes than the full pipeline's detector settings.
+- `paddleocr_simple`'s full pipeline (detection + recognition together, PP-OCRv6 medium models) is the most accurate learned-OCR method tested so far.
+- All PaddleOCR runs use `paddleocr_lang="en"`, PP-OCRv6 medium det/rec models (auto-downloaded to `~/.paddlex/official_models/`), CPU only, `paddlepaddle==3.2.2` (pinned due to the oneDNN bug above).
+
+### Next Steps
+
+- Re-run PaddleOCR timing on an unloaded machine to get trustworthy per-image runtime numbers.
+- Tune `TextDetection` parameters (`thresh`, `box_thresh`, `unclip_ratio`) to try to close the recall gap vs. EasyOCR's detector.
+- Add a single comparison script/table that reads all `summary.json` files (Tesseract + EasyOCR + PaddleOCR) and prints a ranked view.
+- Consider GPU for both EasyOCR and PaddleOCR if a CUDA machine becomes available, since CPU runtime/memory cost is the main practical downside for both so far.
+
 ## Daily Entry Template
 
 ### YYYY-MM-DD

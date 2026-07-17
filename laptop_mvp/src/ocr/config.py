@@ -55,8 +55,10 @@ def current_timestamp():
 
 
 def resolve_default_paths():
+    # This file lives at laptop_mvp/src/ocr/config.py, three levels below the
+    # repo root (handheld-ocr-translator/).
     script_dir = Path(__file__).resolve().parent
-    repo_root = script_dir.parent
+    repo_root = script_dir.parent.parent.parent
     workspace_root = repo_root.parent
 
     dataset_root_candidates = [

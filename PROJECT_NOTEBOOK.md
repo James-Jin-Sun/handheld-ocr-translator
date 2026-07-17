@@ -143,6 +143,32 @@ Use this file to track what was done, what results were observed, and what shoul
 - Add a single comparison script/table that reads all `summary.json` files (Tesseract + EasyOCR + PaddleOCR) and prints a ranked view.
 - Consider GPU for both EasyOCR and PaddleOCR if a CUDA machine becomes available, since CPU runtime/memory cost is the main practical downside for both so far.
 
+## 2026-07-17
+
+### Work Done
+
+- Restructured `laptop_mvp/` into an MVP-shaped layout: `src/ocr/` (all existing Tesseract/EasyOCR/PaddleOCR eval code, renamed entry point `main.py` -> `evaluate.py` to avoid clashing with the new app entry point), `src/translation/`, `src/overlay/`, and top-level `src/main.py`.
+- Added `src/translation/google_translate.py`: a Google Cloud Translation API wrapper (`translate_text`, `translate_batch`) that auto-loads credentials from `laptop_mvp/keys/google-translate-key.json`.
+- Added `src/overlay/draw_translation.py`: blurs each detected text region and draws the translated text on top, with auto-shrinking font to fit the box.
+- Added `src/ocr/text_cleaning.py` (strip OCR symbol noise, collapse repeated punctuation) and a `group_tokens_into_lines` helper that turns Tesseract's per-word confidence-filtered tokens into line-level regions for translation/overlay.
+- Wired it all together in `src/main.py`: OCR (PSM 11 + confidence filter) -> clean -> translate (batched) -> blur & overlay -> save, as a single-image CLI (`python main.py --image ... --target-lang ...`).
+- Added `laptop_mvp/keys/` (git-ignored except a README) as the expected location for the Google Translate service-account key; updated `.gitignore` for the new `src/ocr/ocr_results_*` paths.
+
+### Results
+
+- Structural change only; no new accuracy numbers. Re-ran `evaluate.py --mode gt_bbox_crops --limit 50` after the move to confirm nothing broke: CER `0.1800`, WER `0.5103` (matches the pre-move baseline).
+- Smoke-tested the new `src/main.py` pipeline stages (OCR -> line grouping -> clean -> blur/overlay) on `img_1.jpg` with placeholder translations; detection, cropping/grouping, and overlay rendering all worked end-to-end.
+
+### Notes
+
+- `google-cloud-translate` is not yet installed/tested against a live key — `src/translation/google_translate.py` will raise a clear `SystemExit` with an install hint until it's added.
+- Kept the internal import style consistent with the rest of the project (flat `from module import x`, no package `__init__.py`s); `src/main.py` adds each `src/*` subfolder to `sys.path` itself rather than using relative package imports.
+
+### Next Steps
+
+- Install `google-cloud-translate`, add a real key under `laptop_mvp/keys/`, and run `src/main.py` end-to-end on a real photo.
+- Decide whether the single-image pipeline should reuse a stronger detector (EasyOCR/PaddleOCR detection) instead of Tesseract's PSM 11 word boxes for better line grouping on natural photos.
+
 ## Daily Entry Template
 
 ### YYYY-MM-DD

@@ -1,12 +1,17 @@
 .venv/
-laptop_mvp/__pycache__/
-laptop_mvp/ocr_results_cropped/
-laptop_mvp/ocr_results_cropped_border/
-laptop_mvp/ocr_results_whole_image/
-laptop_mvp/ocr_results_psm11_confidence/
-laptop_mvp/ocr_results_easyocr_simple/
-laptop_mvp/ocr_results_easyocr_paragraph/
-laptop_mvp/ocr_results_easyocr_detection/
-laptop_mvp/ocr_results_paddleocr_simple/
-laptop_mvp/ocr_results_paddleocr_detection/
+**/__pycache__/
+laptop_mvp/src/ocr/ocr_results_cropped/
+laptop_mvp/src/ocr/ocr_results_cropped_border/
+laptop_mvp/src/ocr/ocr_results_whole_image/
+laptop_mvp/src/ocr/ocr_results_psm11_confidence/
+laptop_mvp/src/ocr/ocr_results_easyocr_simple/
+laptop_mvp/src/ocr/ocr_results_easyocr_paragraph/
+laptop_mvp/src/ocr/ocr_results_easyocr_detection/
+laptop_mvp/src/ocr/ocr_results_paddleocr_simple/
+laptop_mvp/src/ocr/ocr_results_paddleocr_detection/
 laptop_mvp/.EasyOCR/
+
+# Secrets: never upload API keys to GitHub.
+laptop_mvp/keys/*
+!laptop_mvp/keys/.gitkeep
+!laptop_mvp/keys/README.md

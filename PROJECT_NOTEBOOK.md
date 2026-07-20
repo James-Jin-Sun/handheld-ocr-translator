@@ -267,6 +267,57 @@ Use this file to track what was done, what results were observed, and what shoul
 
 - If the address-block split quality becomes a priority: consider not splitting per-line at all for blocks with many merged lines (e.g. show one translated caption across the block's union box), or weight the split by each line's bbox width/area instead of raw character count.
 
+## 2026-07-20 (late night)
+
+### Work Done
+
+- Applied 3 UI fixes to `laptop_mvp/src/ui/app.py` requested after the previous click-through testing:
+  - `Select Image` no longer causes a duplicate save into `captures/` on `Confirm` -- tracked via a new `selected_image_path` attribute; the pipeline now runs directly on the originally-picked file instead of re-saving a copy.
+  - `Select Image`'s file dialog now opens in `laptop_mvp/src/ui/captures/` by default (`initialdir`).
+  - `Save` (Frame 3) now defaults to a new `laptop_mvp/translated_images/` folder (`initialdir`), created on startup; user can still browse elsewhere.
+  - Added `laptop_mvp/translated_images/` to `.gitignore`.
+- User connected a real external camera, an **Innomaker U20CAM-1080P** USB UVC camera, and asked to switch the app to use it instead of the laptop's built-in webcam.
+  - Enumerated DirectShow video devices (`pygrabber`) to confirm enumeration order: `0 = Integrated Camera`, `1 = Innomaker-U20CAM-1080p-S1`, `2 = OBS Virtual Camera`. Hardcoding index `1` would work today but is fragile if devices are plugged in a different order later.
+  - Rewrote `laptop_mvp/src/ui/camera.py` to auto-detect the camera **by name** (`"Innomaker-U20CAM-1080p-S1"`) via `pygrabber.dshow_graph.FilterGraph`, falling back to index `0` if the lookup is unavailable (non-Windows) or the camera isn't plugged in. Also switched to the `cv2.CAP_DSHOW` backend (falls back to default backend if that fails to open) and explicitly requests `1920x1080` via `CAP_PROP_FRAME_WIDTH/HEIGHT` instead of relying on the camera's 640x480 default.
+  - Installed `pygrabber` (+ its `comtypes` dependency) into the venv.
+
+### Results
+
+- Verified device auto-detection directly: `_find_device_index_by_name("Innomaker-U20CAM-1080p-S1")` correctly returns index `1`; `Camera().open()` opens that device and reports `1920.0 x 1080.0`, and `read_frame()` returns a `(1920, 1080)` PIL image.
+- No `app.py` changes were needed since it already constructs `Camera()` with defaults, which now resolves to the Innomaker camera automatically.
+
+### Notes
+
+- No `requirements.txt` is actively maintained in this repo (dependencies have been installed ad hoc into the venv per request) -- `pygrabber`/`comtypes` were added the same way. Worth creating one if the project grows further.
+- The Innomaker camera being 16:9 (1920x1080) vs. the built-in webcam's 4:3 (640x480) is a non-issue: `resize_to_fit` in `app.py` already scales-to-fit while preserving aspect ratio for display, and higher native resolution should only help OCR accuracy on captured/selected images.
+
+### Next Steps
+
+- Click-test the live camera feed and a real capture with the Innomaker camera plugged in (only verified programmatically via the `Camera` class so far, not through the actual UI window).
+
+## 2026-07-20 (evening #2)
+
+### Work Done
+
+- User swapped the connected camera from the Innomaker U20CAM-1080P to a **JLab Epic Cam** (enumerates as `EPIC CAM USB HD WEBCAM`) and asked to update the code to use it.
+- Since this is now the second external camera swap, generalized `laptop_mvp/src/ui/camera.py` instead of just swapping one hardcoded name:
+  - `KNOWN_EXTERNAL_CAMERA_NAMES` is now an ordered tuple of known cameras used with this project (JLab Epic Cam, then Innomaker) -- the first one found by name wins.
+  - If none of those match, a new fallback (`_find_first_external_camera_index`) picks the first enumerated device that isn't the built-in webcam or a virtual camera (matched against `EXCLUDED_CAMERA_NAME_SUBSTRINGS`: `"integrated camera"`, `"built-in"`, `"obs virtual camera"`, etc.).
+  - `Camera.__init__` now calls `autodetect_camera_index()` (renamed/refactored from the old single-name lookup) when `device_index` isn't explicitly passed.
+
+### Results
+
+- Verified device enumeration now returns `['Integrated Camera', 'EPIC CAM USB HD WEBCAM', 'OBS Virtual Camera']`; `autodetect_camera_index()` correctly resolves to index `1` (the JLab Epic Cam) via the known-names list.
+- `Camera().open()` opens that device and reports `1920.0 x 1080.0`, and `read_frame()` returns a `(1920, 1080)` PIL image, matching the previous Innomaker test results.
+
+### Notes
+
+- The generic "first external, non-built-in camera" fallback means a *future* unlisted camera should generally work without a code change, as long as its DirectShow name doesn't happen to contain a built-in/virtual substring. Known cameras are still listed explicitly first for a deterministic fast path (and to disambiguate if multiple external cameras are ever connected at once).
+
+### Next Steps
+
+- None outstanding for the camera swap; only verified programmatically so far (not yet click-tested live in the UI window with the JLab Epic Cam specifically).
+
 ## Daily Entry Template
 
 ### YYYY-MM-DD

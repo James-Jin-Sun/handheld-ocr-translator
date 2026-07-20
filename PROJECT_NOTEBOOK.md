@@ -228,6 +228,45 @@ Use this file to track what was done, what results were observed, and what shoul
 - Click through the full Capture -> Confirm -> Translated -> Restart flow end-to-end on a real captured photo (only the import path was verified programmatically so far, not a live button-click run).
 - Consider a cancel button during the "Processing..." state for long-running pipeline calls.
 
+## 2026-07-20 (evening)
+
+### Work Done
+
+- Live end-to-end test of the UI (real click-through, not just programmatic checks): captured a photo of a `CHANEL` label, `Confirm`'d it, pipeline detected `CHANEL` -> translated to `香奈儿`, rendered correctly, window closed cleanly (exit code 0). First real proof the whole loop works outside of automated smoke tests.
+- Added two more buttons per user request:
+  - Frame 1: `Select Image` (bottom right, next to `Capture Image`) — opens a file picker (`tkinter.filedialog.askopenfilename`) so an existing photo can be fed into the pipeline instead of the live webcam; goes straight to Frame 2 like a capture would.
+  - Frame 3: `Save` (bottom left, next to `Close / Restart`) — opens a save dialog (`asksaveasfilename`) to copy the translated image to a user-chosen location, since the auto-saved copy lives in the internal `src/pipeline_results/` folder.
+
+### Results
+
+- Real photo -> translation round trip confirmed working (see `CHANEL` -> `香奈儿` above).
+- Compiled and relaunched the UI after adding the two new buttons; window opens with no tracebacks (button click-through for `Select Image`/`Save` not yet exercised interactively).
+
+### Next Steps
+
+- Click-test `Select Image` and `Save` specifically (file dialogs can't be driven headlessly).
+
+## 2026-07-20 (night)
+
+### Work Done
+
+- Ran two more real UI captures: a repeat `CHANEL` label (clean, as before) and a denser plant-food product label (13 OCR lines -> 6 blocks) as a stress test for `group_lines_into_blocks` / `split_text_across_lines` on irregular layouts.
+- Found a real bug from that stress test: a large standalone `"20"` numeral sat close above two small captions (`JUMBO PELLET` / `PELLETS JUMBO`), and the grouping heuristic merged all three into one block purely on vertical-gap + horizontal-overlap, ignoring their very different font sizes (93px vs ~23-26px line height). The proportional split then cut the translated digits `20` literally in half across mismatched boxes ("2" in one box, "0..." in another) -- clearly wrong.
+- Fixed by adding a line-height similarity check to `group_lines_into_blocks` (`laptop_mvp/src/ocr/text_cleaning.py`): two lines only join the same block if `min(h1, h2) / max(h1, h2) >= min_height_similarity` (default `0.5`), in addition to the existing vertical-gap and horizontal-overlap checks.
+
+### Results
+
+- Verified against both real captured cases directly: the `"20"` / `JUMBO PELLET` / `PELLETS JUMBO` lines (height ratio ~0.25) no longer merge; the billboard's `Tiredness`/`kills` and `A short break`/`could save`/`your life` lines (height ratios ~0.87-0.99) still merge correctly, unaffected by the new check.
+- Re-ran the full pipeline on the saved product-label capture: now produces 7 blocks (was 6), with `"20"` translated and rendered standalone, and `JUMBO PELLET PELLETS JUMBO` -> `巨型颗粒饲料` split cleanly across its own two lines. Visual defect confirmed fixed.
+
+### Notes
+
+- A second issue surfaced by the same stress test was left unfixed per user decision: the address block (5 merged lines: street, city/province/postal code, website, "Made in Vietnam", French translation) still splits unevenly -- one line's segment comes out empty and text shifts onto the wrong line -- because proportional character-count splitting breaks down when the Chinese translation reorders/compresses content differently than the English source lines. This is a paragraph-splitting quality tradeoff, not a grouping bug, and is out of scope for now.
+
+### Next Steps
+
+- If the address-block split quality becomes a priority: consider not splitting per-line at all for blocks with many merged lines (e.g. show one translated caption across the block's union box), or weight the split by each line's bbox width/area instead of raw character count.
+
 ## Daily Entry Template
 
 ### YYYY-MM-DD

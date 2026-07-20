@@ -1,14 +1,17 @@
 """Tkinter UI for the Handheld OCR Translator MVP.
 
-Frame 1 - Default camera view: live webcam feed + "Capture Image".
+Frame 1 - Default camera view: live webcam feed + "Capture Image" (bottom
+    left) / "Select Image" (bottom right, pick an existing file instead).
 Frame 2 - Image captured: static captured frame + "Confirm" / "Close / Retake".
-Frame 3 - Translation completed: translated image + "Close / Restart".
+Frame 3 - Translation completed: translated image + "Save" (bottom left) /
+    "Close / Restart" (bottom right).
 
 Flow:
-    Frame 1 --Capture Image--> Frame 2
+    Frame 1 --Capture Image / Select Image--> Frame 2
     Frame 2 --Close / Retake--> Frame 1
     Frame 2 --Confirm--> [OCR -> Translation -> Overlay, on a background
         thread] --> Frame 3
+    Frame 3 --Save--> (file saved, stays on Frame 3)
     Frame 3 --Close / Restart--> Frame 1
 
 Usage:
@@ -19,7 +22,7 @@ import sys
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 
 UI_DIR = Path(__file__).resolve().parent
 SRC_DIR = UI_DIR.parent
@@ -35,6 +38,8 @@ APP_TITLE = "Handheld OCR Translator"
 IMAGE_AREA_SIZE = (820, 560)
 CAMERA_REFRESH_MS = 33  # ~30 fps
 CAPTURES_DIR = UI_DIR / "captures"
+LAPTOP_MVP_DIR = SRC_DIR.parent
+TRANSLATED_IMAGES_DIR = LAPTOP_MVP_DIR / "translated_images"
 
 STATE_CAMERA = "camera"
 STATE_CAPTURED = "captured"
@@ -79,6 +84,7 @@ class App(tk.Tk):
         self.camera = Camera()
         self.captured_image = None  # PIL Image captured from the live feed
         self.captured_image_path = None
+        self.selected_image_path = None  # set only when the image came from "Select Image"
         self.translated_image_path = None
         self._last_camera_frame = None
         self._camera_job = None
@@ -88,6 +94,7 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         CAPTURES_DIR.mkdir(parents=True, exist_ok=True)
+        TRANSLATED_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
         self._enter_camera_state()
 
     # ---- widget setup -----------------------------------------------
@@ -135,6 +142,12 @@ class App(tk.Tk):
             command=self._on_capture_clicked,
             **BUTTON_STYLE,
         ).pack(side="left", padx=10, pady=5)
+        tk.Button(
+            self.controls_frame,
+            text="Select Image",
+            command=self._on_select_image_clicked,
+            **BUTTON_STYLE,
+        ).pack(side="right", padx=10, pady=5)
 
     def _show_captured_controls(self):
         self._clear_controls()
@@ -165,6 +178,12 @@ class App(tk.Tk):
         self._clear_controls()
         tk.Button(
             self.controls_frame,
+            text="Save",
+            command=self._on_save_clicked,
+            **BUTTON_STYLE,
+        ).pack(side="left", padx=10, pady=5)
+        tk.Button(
+            self.controls_frame,
             text="Close / Restart",
             command=self._on_restart_clicked,
             **BUTTON_STYLE,
@@ -187,6 +206,7 @@ class App(tk.Tk):
     def _enter_camera_state(self):
         self.state_name = STATE_CAMERA
         self.captured_image = None
+        self.selected_image_path = None
         self._show_camera_controls()
 
         if not self.camera.is_open() and not self.camera.open():
@@ -226,6 +246,32 @@ class App(tk.Tk):
         self.captured_image = self._last_camera_frame.copy()
         self._enter_captured_state()
 
+    def _on_select_image_clicked(self):
+        file_path = filedialog.askopenfilename(
+            title="Select an image",
+            initialdir=str(CAPTURES_DIR),
+            filetypes=[
+                ("Image files", "*.jpg *.jpeg *.png *.bmp *.gif *.tiff"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not file_path:
+            return
+
+        try:
+            with Image.open(file_path) as image:
+                selected_image = image.convert("RGB").copy()
+        except Exception as exc:  # noqa: BLE001 - surface any load failure to the user
+            messagebox.showerror(APP_TITLE, f"Could not open image:\n{exc}")
+            return
+
+        self._cancel_camera_job()
+        self.captured_image = selected_image
+        # Already exists on disk -- confirm should use it directly instead of
+        # re-saving a duplicate copy into the captures folder.
+        self.selected_image_path = Path(file_path)
+        self._enter_captured_state()
+
     # ---- Frame 2: image captured ----------------------------------------
 
     def _enter_captured_state(self):
@@ -241,9 +287,14 @@ class App(tk.Tk):
         if self.captured_image is None:
             return
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        capture_path = CAPTURES_DIR / f"capture_{timestamp}.jpg"
-        self.captured_image.convert("RGB").save(capture_path)
+        if self.selected_image_path is not None:
+            # Image was picked via "Select Image" and already exists on disk --
+            # feed it to the pipeline as-is instead of saving a duplicate copy.
+            capture_path = self.selected_image_path
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            capture_path = CAPTURES_DIR / f"capture_{timestamp}.jpg"
+            self.captured_image.convert("RGB").save(capture_path)
         self.captured_image_path = capture_path
 
         self._enter_processing_state()
@@ -289,6 +340,31 @@ class App(tk.Tk):
         with Image.open(self.translated_image_path) as translated_image:
             self._display_image(translated_image.convert("RGB"))
         self._show_translated_controls()
+
+    def _on_save_clicked(self):
+        if self.translated_image_path is None or not Path(self.translated_image_path).exists():
+            messagebox.showwarning(APP_TITLE, "No translated image available to save.")
+            return
+
+        source_path = Path(self.translated_image_path)
+        destination = filedialog.asksaveasfilename(
+            title="Save translated image",
+            initialdir=str(TRANSLATED_IMAGES_DIR),
+            initialfile=source_path.name,
+            defaultextension=source_path.suffix or ".jpg",
+            filetypes=[("JPEG image", "*.jpg *.jpeg"), ("PNG image", "*.png"), ("All files", "*.*")],
+        )
+        if not destination:
+            return
+
+        try:
+            with Image.open(source_path) as image:
+                image.convert("RGB").save(destination)
+        except Exception as exc:  # noqa: BLE001 - surface any save failure to the user
+            messagebox.showerror(APP_TITLE, f"Could not save image:\n{exc}")
+            return
+
+        messagebox.showinfo(APP_TITLE, f"Saved translated image to:\n{destination}")
 
     def _on_restart_clicked(self):
         self._enter_camera_state()

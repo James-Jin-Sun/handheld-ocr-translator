@@ -29,14 +29,23 @@ def _horizontal_overlap_ratio(box_a, box_b):
     return (overlap / narrower_width) if narrower_width > 0 else 0.0
 
 
-def group_lines_into_blocks(lines, max_gap_factor=0.7, min_horizontal_overlap=0.3):
+def group_lines_into_blocks(
+    lines,
+    max_gap_factor=0.7,
+    min_horizontal_overlap=0.3,
+    min_height_similarity=0.5,
+):
     """Merge line-level OCR regions into sentence/paragraph blocks so the
     translator sees complete sentences instead of isolated line fragments.
 
-    Two consecutive lines (in top-to-bottom order) join the same block when
-    the vertical gap between them is small relative to their line height and
-    their x-ranges overlap (i.e. they visually stack like lines of the same
-    sentence/paragraph).
+    Two consecutive lines (in top-to-bottom order) join the same block when:
+    - the vertical gap between them is small relative to their line height,
+    - their x-ranges overlap (i.e. they visually stack like lines of the
+      same sentence/paragraph), and
+    - their line heights are similar (`min(h1, h2) / max(h1, h2)` is at
+      least `min_height_similarity`) -- this keeps e.g. a large standalone
+      number/heading from being merged with unrelated small captions just
+      because they happen to sit close together.
 
     `lines` is a list of dicts with at least "text" and "bbox" (x1, y1, x2, y2).
     Returns a list of dicts, each with:
@@ -60,9 +69,12 @@ def group_lines_into_blocks(lines, max_gap_factor=0.7, min_horizontal_overlap=0.
             last_height = max(1, block["last_line_height"])
             vertical_gap = y1 - by2
             max_gap = max_gap_factor * min(line_height, last_height)
+            height_similarity = min(line_height, last_height) / max(line_height, last_height)
 
-            if vertical_gap <= max_gap and (
-                _horizontal_overlap_ratio(line["bbox"], block["bbox"]) >= min_horizontal_overlap
+            if (
+                vertical_gap <= max_gap
+                and height_similarity >= min_height_similarity
+                and _horizontal_overlap_ratio(line["bbox"], block["bbox"]) >= min_horizontal_overlap
             ):
                 target_block = block
                 break

@@ -123,12 +123,81 @@ def split_text_across_lines(text, weights):
     return segments
 
 
+def _overlap_extent(box_a, box_b):
+    ax1, ay1, ax2, ay2 = box_a
+    bx1, by1, bx2, by2 = box_b
+    overlap_x = min(ax2, bx2) - max(ax1, bx1)
+    overlap_y = min(ay2, by2) - max(ay1, by1)
+    return overlap_x, overlap_y
+
+
+def _separate_pair(box_a, box_b, min_size=4):
+    """If `box_a` and `box_b` overlap, shrink both along whichever axis has
+    the smaller overlap so they touch but no longer overlap, splitting the
+    shared boundary down the middle."""
+    ax1, ay1, ax2, ay2 = box_a
+    bx1, by1, bx2, by2 = box_b
+    overlap_x, overlap_y = _overlap_extent(box_a, box_b)
+
+    if overlap_x <= 0 or overlap_y <= 0:
+        return box_a, box_b
+
+    if overlap_x <= overlap_y:
+        if (ax1 + ax2) <= (bx1 + bx2):
+            midpoint = (ax2 + bx1) / 2
+            ax2 = max(ax1 + min_size, midpoint)
+            bx1 = min(bx2 - min_size, midpoint)
+        else:
+            midpoint = (bx2 + ax1) / 2
+            bx2 = max(bx1 + min_size, midpoint)
+            ax1 = min(ax2 - min_size, midpoint)
+    else:
+        if (ay1 + ay2) <= (by1 + by2):
+            midpoint = (ay2 + by1) / 2
+            ay2 = max(ay1 + min_size, midpoint)
+            by1 = min(by2 - min_size, midpoint)
+        else:
+            midpoint = (by2 + ay1) / 2
+            by2 = max(by1 + min_size, midpoint)
+            ay1 = min(ay2 - min_size, midpoint)
+
+    return (ax1, ay1, ax2, ay2), (bx1, by1, bx2, by2)
+
+
+def resolve_overlapping_boxes(regions, max_iterations=5):
+    """Nudge overlapping backdrop boxes apart so rendered regions don't
+    collide (e.g. adjacent OCR line boxes that overlap by a few pixels).
+
+    Runs a few passes over every pair since separating one pair can (rarely)
+    introduce a new overlap with a third box in dense layouts.
+
+    `regions` is a list of dicts with a "bbox" key: (x1, y1, x2, y2).
+    Returns a new list of dicts (inputs are not mutated) with adjusted boxes.
+    """
+    boxes = [list(region["bbox"]) for region in regions]
+
+    for _ in range(max_iterations):
+        changed = False
+        for i in range(len(boxes)):
+            for j in range(i + 1, len(boxes)):
+                overlap_x, overlap_y = _overlap_extent(boxes[i], boxes[j])
+                if overlap_x > 0 and overlap_y > 0:
+                    boxes[i], boxes[j] = _separate_pair(boxes[i], boxes[j])
+                    changed = True
+        if not changed:
+            break
+
+    return [{**region, "bbox": tuple(boxes[index])} for index, region in enumerate(regions)]
+
+
 def blur_and_overlay(image, regions, blur_radius=DEFAULT_BLUR_RADIUS):
     """Blur each region's source text and draw its translated text on top.
 
     `regions` is a list of dicts: {"bbox": (x1, y1, x2, y2), "translated_text": str}.
+    Overlapping boxes are nudged apart first so backdrops/text don't collide.
     """
     image = image.convert("RGB")
+    regions = resolve_overlapping_boxes(regions)
     for region in regions:
         image = blur_region(image, region["bbox"], blur_radius)
         image = draw_text_over_region(image, region["bbox"], region.get("translated_text", ""))

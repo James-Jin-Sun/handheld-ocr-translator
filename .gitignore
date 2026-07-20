@@ -13,3 +13,4 @@ laptop_mvp/.EasyOCR/
 laptop_mvp/src/translation/test_output/
 laptop_mvp/src/overlay/test_output/
 laptop_mvp/src/pipeline_results/
+laptop_mvp/src/ui/captures/

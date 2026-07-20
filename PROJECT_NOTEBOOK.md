@@ -179,6 +179,55 @@ Use this file to track what was done, what results were observed, and what shoul
 - Try the pipeline on more/other images (multi-column layouts, side-by-side signs) to stress-test the block-grouping heuristics (`max_gap_factor`, `min_horizontal_overlap`).
 - The proportional split is length-based, not meaning-based — segments like `或许能救` / `你一命` can break mid-phrase. If this matters, a smarter split (e.g. on Chinese punctuation/word boundaries via jieba) could improve it.
 
+## 2026-07-20
+
+### Work Done
+
+- Fixed overlapping backdrop/text boxes in the final overlay image: adjacent OCR line boxes (e.g. within a sentence block) sometimes overlap vertically by a few pixels (ascenders/descenders in PaddleOCR's detected polygons), which made neighboring blurred backdrops bleed into each other.
+- Added `resolve_overlapping_boxes` to `src/overlay/draw_translation.py`: for every pair of regions that overlap, shrinks both boxes along whichever axis has the smaller overlap, splitting the shared boundary at its midpoint (a few passes to settle any knock-on overlaps). Wired it into `blur_and_overlay` itself, so both `src/main.py` and the standalone overlay test get non-overlapping boxes automatically with no caller changes needed.
+
+### Results
+
+- Unit-checked `resolve_overlapping_boxes` against the real `img_1.jpg` line boxes (which had 19-40px vertical overlaps between consecutive lines) — all five boxes came back touching cleanly at the midpoint instead of overlapping.
+- Re-ran the full pipeline on `img_1.jpg`: the two sentence blocks (`疲劳会`/`致命` and `短暂的休息`/`或许能救`/`你一命`) now render with clean box boundaries between lines, no more overlapping black backdrops.
+
+### Notes
+
+- The separation is geometry-only (backdrop boxes), not glyph-aware — very large/tall fonts could still visually spill slightly past a box's edge even though boxes themselves no longer overlap; not observed as an issue yet.
+- `resolve_overlapping_boxes` is O(n^2) per pass over all region pairs, fine for the handful of text regions per image expected here.
+
+### Next Steps
+
+- Try on an image with a denser/more irregular text layout to stress-test the pairwise separation (current test cases are simple vertical stacks).
+
+## 2026-07-20 (later)
+
+### Work Done
+
+- Added `laptop_mvp/src/ui/`: a Tkinter desktop UI wrapping the full pipeline in 3 frames, per spec:
+  - Frame 1 (camera): live webcam feed (`camera.py`, OpenCV `VideoCapture` polled every ~33ms) + `Capture Image`.
+  - Frame 2 (captured): static snapshot of the last live frame + `Confirm` / `Close / Retake`.
+  - Frame 3 (translated): the pipeline's output image + `Close / Restart`.
+- `Confirm` saves the captured frame to `src/ui/captures/capture_<timestamp>.jpg`, then runs `src/main.py`'s `run_pipeline` on a background thread (`pipeline_worker.py`) so the UI doesn't freeze during PaddleOCR + Translate (which can take 15-60s+); results are marshaled back to the Tk main thread via `after(0, ...)`.
+- If no text is detected, or the pipeline raises, the UI shows a message and drops back to Frame 2 (captured) rather than losing the capture.
+- `main` is imported lazily inside the worker thread (not at UI startup) since it pulls in PaddleOCR/paddle, which is slow to import — keeps the UI window launching instantly.
+
+### Results
+
+- Verified webcam access via OpenCV directly (`cv2.VideoCapture(0)`, 640x480) before wiring it into the UI.
+- Launched `python src/ui/app.py` — window opens and runs with no tracebacks; live camera feed confirmed loading correctly.
+- Verified the `pipeline_worker` -> `main.py` import path resolves and `run_pipeline` is callable, without needing to click through the full UI flow to test it.
+
+### Notes
+
+- Window is fixed-size (not resizable) for simplicity; image area is 820x560 and every displayed image (camera frame / capture / translated result) is scaled down (never up) to fit while preserving aspect ratio.
+- `laptop_mvp/src/ui/captures/` (raw webcam snapshots) is git-ignored, same as the other generated-output folders.
+
+### Next Steps
+
+- Click through the full Capture -> Confirm -> Translated -> Restart flow end-to-end on a real captured photo (only the import path was verified programmatically so far, not a live button-click run).
+- Consider a cancel button during the "Processing..." state for long-running pipeline calls.
+
 ## Daily Entry Template
 
 ### YYYY-MM-DD

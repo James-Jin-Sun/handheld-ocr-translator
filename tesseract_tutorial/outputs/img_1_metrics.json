@@ -1,0 +1,32 @@
+{
+  "tesseract": {
+    "cer": 0.9596774193548387,
+    "wer": 1.0,
+    "char_distance": 238,
+    "word_distance": 45,
+    "gt_num_chars": 248,
+    "pred_num_chars": 19,
+    "gt_num_words": 45,
+    "pred_num_words": 7
+  },
+  "easyocr": {
+    "cer": 0.842741935483871,
+    "wer": 1.0,
+    "char_distance": 209,
+    "word_distance": 45,
+    "gt_num_chars": 248,
+    "pred_num_chars": 50,
+    "gt_num_words": 45,
+    "pred_num_words": 8
+  },
+  "paddleocr": {
+    "cer": 0.8064516129032258,
+    "wer": 1.0,
+    "char_distance": 200,
+    "word_distance": 45,
+    "gt_num_chars": 248,
+    "pred_num_chars": 48,
+    "gt_num_words": 45,
+    "pred_num_words": 8
+  }
+}

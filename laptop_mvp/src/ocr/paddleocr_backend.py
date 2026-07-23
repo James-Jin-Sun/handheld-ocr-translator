@@ -12,6 +12,7 @@ except ImportError as exc:
     raise SystemExit("Missing dependency: install Pillow with `pip install pillow`.") from exc
 
 try:
+    import paddle
     from paddleocr import PaddleOCR, TextDetection, TextRecognition
 except ImportError as exc:
     raise SystemExit(
@@ -23,8 +24,25 @@ from metrics import detection_prf, match_boxes_by_iou, normalize_text, polygon_t
 from ocr import crop_text_region
 
 
+@lru_cache(maxsize=1)
+def _cuda_available():
+    """Whether this paddlepaddle build has a working CUDA device.
+
+    Some Jetson paddlepaddle-gpu builds crash (native SIGSEGV, no Python
+    traceback) when forced onto their CPU inference path, so GPU should be
+    used automatically whenever it's available rather than only when a
+    caller happens to pass `--paddleocr-gpu`.
+    """
+    try:
+        return bool(paddle.device.is_compiled_with_cuda()) and paddle.device.cuda.device_count() > 0
+    except Exception:
+        return False
+
+
 def _device_for(config):
-    return "gpu" if config.paddleocr_gpu else "cpu"
+    if config.paddleocr_gpu:
+        return "gpu"
+    return "gpu" if _cuda_available() else "cpu"
 
 
 @lru_cache(maxsize=4)

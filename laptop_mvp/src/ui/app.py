@@ -54,6 +54,11 @@ BUTTON_STYLE = {
     "cursor": "hand2",
 }
 
+STATUS_COLOR_NORMAL = "#cccccc"
+STATUS_COLOR_WARNING = "#f08080"
+NO_CAMERA_STATUS_TEXT = "No camera detected. Connect a camera to resume live view, or use 'Select Image'."
+NO_CAMERA_PLACEHOLDER_TEXT = "LIVE CAMERA VIEW\n(no camera detected)"
+
 
 def _resample_filter():
     if hasattr(Image, "Resampling"):
@@ -89,6 +94,10 @@ class App(tk.Tk):
         self._last_camera_frame = None
         self._camera_job = None
         self._display_photo = None  # keep a reference so Tk doesn't GC it
+        # None = not checked yet (used to show the one-time startup prompt);
+        # True/False = last connection state the UI has reacted to, so
+        # ongoing polling only updates the UI on an actual state change.
+        self._camera_connected = None
 
         self._build_widgets()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -116,15 +125,15 @@ class App(tk.Tk):
         self.image_label.pack(fill="both", expand=True)
 
         self.status_var = tk.StringVar(value="")
-        status_label = tk.Label(
+        self.status_label = tk.Label(
             self,
             textvariable=self.status_var,
             bg="#1e1e1e",
-            fg="#cccccc",
+            fg=STATUS_COLOR_NORMAL,
             font=("Segoe UI", 11),
             anchor="w",
         )
-        status_label.pack(side="top", fill="x", padx=14, pady=(8, 0))
+        self.status_label.pack(side="top", fill="x", padx=14, pady=(8, 0))
 
         self.controls_frame = tk.Frame(self, bg="#1e1e1e", height=70)
         self.controls_frame.pack_propagate(False)
@@ -136,18 +145,20 @@ class App(tk.Tk):
 
     def _show_camera_controls(self):
         self._clear_controls()
-        tk.Button(
+        self.capture_button = tk.Button(
             self.controls_frame,
             text="Capture Image",
             command=self._on_capture_clicked,
             **BUTTON_STYLE,
-        ).pack(side="left", padx=10, pady=5)
+        )
+        self.capture_button.pack(side="left", padx=10, pady=5)
         tk.Button(
             self.controls_frame,
             text="Select Image",
             command=self._on_select_image_clicked,
             **BUTTON_STYLE,
         ).pack(side="right", padx=10, pady=5)
+        self._sync_capture_button_state()
 
     def _show_captured_controls(self):
         self._clear_controls()
@@ -201,6 +212,49 @@ class App(tk.Tk):
         self._display_photo = None
         self.image_label.configure(image="", text=placeholder_text)
 
+    # ---- camera connection status ----------------------------------------
+
+    def _set_status(self, text, warning=False):
+        self.status_var.set(text)
+        self.status_label.configure(fg=STATUS_COLOR_WARNING if warning else STATUS_COLOR_NORMAL)
+
+    def _sync_capture_button_state(self):
+        capture_button = getattr(self, "capture_button", None)
+        if capture_button is None or not capture_button.winfo_exists():
+            return
+        capture_button.configure(state="normal" if self._camera_connected else "disabled")
+
+    def _apply_camera_connection_state(self, connected):
+        """Update status text/placeholder/button state on a connection-state
+        change, and (only the very first time, at startup) pop up a modal
+        warning if no camera is present. Called both right after an
+        open()/reconnect attempt and from the per-frame poll loop, so it
+        covers startup, ongoing disconnects, and automatic reconnects."""
+        previously_connected = self._camera_connected
+        first_check = previously_connected is None
+        self._camera_connected = connected
+
+        if connected:
+            if previously_connected is not True:
+                self._set_status(
+                    "Camera reconnected - live view resumed."
+                    if previously_connected is False
+                    else "Live camera view - point at text, then capture."
+                )
+        else:
+            self._clear_image(NO_CAMERA_PLACEHOLDER_TEXT)
+            self._set_status(NO_CAMERA_STATUS_TEXT, warning=True)
+            if first_check:
+                messagebox.showwarning(
+                    APP_TITLE,
+                    "No camera detected.\n\n"
+                    "Connect a camera to use the live view, or use 'Select Image' "
+                    "to load an existing photo instead. The live feed will start "
+                    "automatically once a camera is connected.",
+                )
+
+        self._sync_capture_button_state()
+
     # ---- Frame 1: live camera view --------------------------------------
 
     def _enter_camera_state(self):
@@ -209,12 +263,8 @@ class App(tk.Tk):
         self.selected_image_path = None
         self._show_camera_controls()
 
-        if not self.camera.is_open() and not self.camera.open():
-            self.status_var.set("No camera detected.")
-            self._clear_image("LIVE CAMERA VIEW\n(no camera detected)")
-            return
-
-        self.status_var.set("Live camera view - point at text, then capture.")
+        connected = self.camera.is_open() or self.camera.open()
+        self._apply_camera_connection_state(connected)
         self._schedule_camera_update()
 
     def _schedule_camera_update(self):
@@ -234,6 +284,15 @@ class App(tk.Tk):
         if frame is not None:
             self._last_camera_frame = frame
             self._display_image(frame)
+            if not self._camera_connected:
+                self._apply_camera_connection_state(True)
+        elif not self.camera.connected:
+            # No frame and the camera is (still, or newly) considered
+            # disconnected -- keep periodically retrying so a reconnected
+            # camera is picked back up automatically without a restart.
+            reconnected = self.camera.try_reconnect()
+            if reconnected != self._camera_connected:
+                self._apply_camera_connection_state(reconnected)
 
         self._camera_job = self.after(CAMERA_REFRESH_MS, self._update_camera_frame)
 

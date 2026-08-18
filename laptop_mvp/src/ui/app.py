@@ -32,6 +32,7 @@ if str(SRC_DIR) not in sys.path:
 from PIL import Image, ImageTk  # noqa: E402
 
 from camera import Camera  # noqa: E402
+from gpio_buttons import GpioButtons  # noqa: E402
 from pipeline_worker import run_pipeline_async  # noqa: E402
 
 APP_TITLE = "Handheld OCR Translator"
@@ -98,6 +99,14 @@ class App(tk.Tk):
         # True/False = last connection state the UI has reacted to, so
         # ongoing polling only updates the UI on an actual state change.
         self._camera_connected = None
+
+        # Optional physical buttons (Jetson GPIO pins 29/31) standing in for
+        # mouse clicks -- None on platforms without GPIO support (e.g. the
+        # Windows laptop MVP), in which case the UI is mouse/keyboard-only.
+        self.gpio_buttons = GpioButtons.create(
+            on_primary=self._on_gpio_primary_button,
+            on_secondary=self._on_gpio_secondary_button,
+        )
 
         self._build_widgets()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -428,11 +437,46 @@ class App(tk.Tk):
     def _on_restart_clicked(self):
         self._enter_camera_state()
 
+    # ---- physical GPIO buttons (optional, Jetson only) --------------------
+    #
+    # Each screen shows two on-screen buttons (left = "primary"/move forward,
+    # right = "secondary"/go back or pick alternate). The two physical
+    # buttons mirror that same left/right convention so they act as a
+    # drop-in replacement for mouse clicks, whichever screen is showing.
+
+    def _on_gpio_primary_button(self):
+        # Called from a Jetson.GPIO background thread -- hop onto the Tk main thread.
+        self.after(0, self._handle_primary_action)
+
+    def _on_gpio_secondary_button(self):
+        # Called from a Jetson.GPIO background thread -- hop onto the Tk main thread.
+        self.after(0, self._handle_secondary_action)
+
+    def _handle_primary_action(self):
+        if self.state_name == STATE_CAMERA:
+            self._on_capture_clicked()
+        elif self.state_name == STATE_CAPTURED:
+            self._on_confirm_clicked()
+        elif self.state_name == STATE_TRANSLATED:
+            self._on_save_clicked()
+        # STATE_PROCESSING: no on-screen buttons, so no-op.
+
+    def _handle_secondary_action(self):
+        if self.state_name == STATE_CAMERA:
+            self._on_select_image_clicked()
+        elif self.state_name == STATE_CAPTURED:
+            self._on_retake_clicked()
+        elif self.state_name == STATE_TRANSLATED:
+            self._on_restart_clicked()
+        # STATE_PROCESSING: no on-screen buttons, so no-op.
+
     # ---- lifecycle --------------------------------------------------------
 
     def _on_close(self):
         self._cancel_camera_job()
         self.camera.release()
+        if self.gpio_buttons is not None:
+            self.gpio_buttons.close()
         self.destroy()
 
 

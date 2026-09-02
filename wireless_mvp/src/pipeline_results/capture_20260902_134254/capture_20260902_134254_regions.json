@@ -1,0 +1,157 @@
+{
+  "image": "D:\\Handheld OCR Translator\\handheld-ocr-translator\\wireless_mvp\\src\\ui\\captures\\capture_20260902_134254.jpg",
+  "ocr_engine": "paddleocr_simple",
+  "paddleocr_lang": "en",
+  "target_language": "zh-CN",
+  "source_language": null,
+  "ocr_runtime_seconds": 9.717015000000174,
+  "blocks": [
+    {
+      "bbox": [
+        821,
+        172,
+        956,
+        208
+      ],
+      "text": "CANADA",
+      "translated_text": "加拿大",
+      "lines": [
+        {
+          "bbox": [
+            821,
+            172,
+            956,
+            208
+          ],
+          "text": "CANADA",
+          "confidence": 0.9999411702156067,
+          "translated_segment": "加拿大"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        566,
+        224,
+        1140,
+        410
+      ],
+      "text": "Scotties",
+      "translated_text": "斯科蒂斯",
+      "lines": [
+        {
+          "bbox": [
+            566,
+            224,
+            1140,
+            410
+          ],
+          "text": "Scotties",
+          "confidence": 0.9999439120292664,
+          "translated_segment": "斯科蒂斯"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        483,
+        456,
+        1169,
+        644
+      ],
+      "text": "Ultra Soft Ultra Doux with lotion avec lotion 3 PLY ÉPAISSEURS Jai NYPOALLESO",
+      "translated_text": "超柔软超柔润，含润肤露，三层结构，Jai NYPOALLESO",
+      "lines": [
+        {
+          "bbox": [
+            508,
+            456,
+            1169,
+            534
+          ],
+          "text": "Ultra Soft Ultra Doux",
+          "confidence": 0.9999440312385559,
+          "translated_segment": "超柔软超柔润，含润肤露，三层结构，Jai"
+        },
+        {
+          "bbox": [
+            595,
+            524,
+            791,
+            568
+          ],
+          "text": "with lotion",
+          "confidence": 0.9988400936126709,
+          "translated_segment": ""
+        },
+        {
+          "bbox": [
+            882,
+            535,
+            1079,
+            575
+          ],
+          "text": "avec lotion",
+          "confidence": 0.9990734457969666,
+          "translated_segment": ""
+        },
+        {
+          "bbox": [
+            779,
+            601,
+            980,
+            640
+          ],
+          "text": "3 PLY ÉPAISSEURS",
+          "confidence": 0.9541938304901123,
+          "translated_segment": ""
+        },
+        {
+          "bbox": [
+            483,
+            612,
+            578,
+            637
+          ],
+          "text": "Jai",
+          "confidence": 0.41386178135871887,
+          "translated_segment": ""
+        },
+        {
+          "bbox": [
+            1018,
+            630,
+            1114,
+            644
+          ],
+          "text": "NYPOALLESO",
+          "confidence": 0.7399109601974487,
+          "translated_segment": "NYPOALLESO"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        484,
+        598,
+        605,
+        622
+      ],
+      "text": "164 T",
+      "translated_text": "164吨",
+      "lines": [
+        {
+          "bbox": [
+            484,
+            598,
+            605,
+            622
+          ],
+          "text": "164 T",
+          "confidence": 0.7212813496589661,
+          "translated_segment": "164吨"
+        }
+      ]
+    }
+  ]
+}

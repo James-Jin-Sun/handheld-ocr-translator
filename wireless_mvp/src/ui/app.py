@@ -379,18 +379,20 @@ class App(tk.Tk):
         self.status_var.set("Processing: OCR -> Translation -> Overlay... this can take up to a minute.")
         self._show_processing_controls()
 
-    def _on_pipeline_done(self, saved_path):
+    def _on_pipeline_done(self, saved_path, ocr_runtime):
         # Called from the worker thread -- hop back onto the Tk main thread.
-        self.after(0, self._handle_pipeline_done, saved_path)
+        self.after(0, self._handle_pipeline_done, saved_path, ocr_runtime)
 
-    def _handle_pipeline_done(self, saved_path):
+    def _handle_pipeline_done(self, saved_path, ocr_runtime):
         if saved_path is None:
-            messagebox.showinfo(APP_TITLE, "No text was detected in the captured image.")
+            messagebox.showinfo(
+                APP_TITLE, f"No text was detected in the captured image.\nOCR took {ocr_runtime:.2f}s."
+            )
             self._enter_captured_state()
             return
 
         self.translated_image_path = Path(saved_path)
-        self._enter_translated_state()
+        self._enter_translated_state(ocr_runtime)
 
     def _on_pipeline_error(self, exc):
         # Called from the worker thread -- hop back onto the Tk main thread.
@@ -402,9 +404,9 @@ class App(tk.Tk):
 
     # ---- Frame 3: translation completed ---------------------------------
 
-    def _enter_translated_state(self):
+    def _enter_translated_state(self, ocr_runtime):
         self.state_name = STATE_TRANSLATED
-        self.status_var.set("Translation complete.")
+        self.status_var.set(f"Translation complete. (OCR: {ocr_runtime:.2f}s)")
         with Image.open(self.translated_image_path) as translated_image:
             self._display_image(translated_image.convert("RGB"))
         self._show_translated_controls()

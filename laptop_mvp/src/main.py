@@ -95,9 +95,11 @@ def run_pipeline(
         if text:
             lines_detected.append({"bbox": row["bbox"], "text": text, "confidence": row["confidence"]})
 
+    print(f"OCR (PaddleOCR) took {ocr_runtime:.2f}s.")
+
     if not lines_detected:
         print("No text detected.")
-        return None
+        return None, ocr_runtime
 
     blocks = group_lines_into_blocks(lines_detected)
 
@@ -160,7 +162,7 @@ def run_pipeline(
         print(f"  - {block['text']!r} -> {translation!r}")
     print(f"Saved translated image to {saved_path}")
     print(f"Saved region manifest to {manifest_path}")
-    return saved_path
+    return saved_path, ocr_runtime
 
 
 def main():

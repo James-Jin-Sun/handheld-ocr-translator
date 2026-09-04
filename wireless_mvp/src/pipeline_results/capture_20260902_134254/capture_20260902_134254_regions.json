@@ -1,155 +1,202 @@
 {
   "image": "D:\\Handheld OCR Translator\\handheld-ocr-translator\\wireless_mvp\\src\\ui\\captures\\capture_20260902_134254.jpg",
-  "ocr_engine": "paddleocr_simple",
-  "paddleocr_lang": "en",
+  "ocr_engine": "google_vision",
   "target_language": "zh-CN",
   "source_language": null,
-  "ocr_runtime_seconds": 9.717015000000174,
+  "ocr_runtime_seconds": 0.9610688999964623,
   "blocks": [
     {
       "bbox": [
-        821,
-        172,
-        956,
-        208
+        826,
+        160,
+        951,
+        204
       ],
-      "text": "CANADA",
-      "translated_text": "加拿大",
+      "text": "MLADE 1N / FABRIQUE CANADA",
+      "translated_text": "MLADE 1N / 加拿大制造",
       "lines": [
         {
           "bbox": [
-            821,
-            172,
-            956,
-            208
+            828,
+            160,
+            940,
+            179
+          ],
+          "text": "MLADE 1N / FABRIQUE",
+          "confidence": 0.5383730977773666,
+          "translated_segment": "MLADE 1N /"
+        },
+        {
+          "bbox": [
+            826,
+            177,
+            951,
+            204
           ],
           "text": "CANADA",
-          "confidence": 0.9999411702156067,
-          "translated_segment": "加拿大"
+          "confidence": 0.9909201264381409,
+          "translated_segment": "加拿大制造"
         }
       ]
     },
     {
       "bbox": [
-        566,
-        224,
-        1140,
-        410
+        569,
+        244,
+        1112,
+        393
       ],
       "text": "Scotties",
       "translated_text": "斯科蒂斯",
       "lines": [
         {
           "bbox": [
-            566,
-            224,
-            1140,
-            410
+            569,
+            244,
+            1112,
+            393
           ],
           "text": "Scotties",
-          "confidence": 0.9999439120292664,
+          "confidence": 0.9308416247367859,
           "translated_segment": "斯科蒂斯"
         }
       ]
     },
     {
       "bbox": [
-        483,
-        456,
-        1169,
-        644
+        514,
+        465,
+        1161,
+        527
       ],
-      "text": "Ultra Soft Ultra Doux with lotion avec lotion 3 PLY ÉPAISSEURS Jai NYPOALLESO",
-      "translated_text": "超柔软超柔润，含润肤露，三层结构，Jai NYPOALLESO",
+      "text": "Ultra Soft Ultra Doux",
+      "translated_text": "超柔软",
       "lines": [
         {
           "bbox": [
-            508,
-            456,
-            1169,
-            534
+            514,
+            465,
+            1161,
+            527
           ],
           "text": "Ultra Soft Ultra Doux",
-          "confidence": 0.9999440312385559,
-          "translated_segment": "超柔软超柔润，含润肤露，三层结构，Jai"
-        },
-        {
-          "bbox": [
-            595,
-            524,
-            791,
-            568
-          ],
-          "text": "with lotion",
-          "confidence": 0.9988400936126709,
-          "translated_segment": ""
-        },
-        {
-          "bbox": [
-            882,
-            535,
-            1079,
-            575
-          ],
-          "text": "avec lotion",
-          "confidence": 0.9990734457969666,
-          "translated_segment": ""
-        },
-        {
-          "bbox": [
-            779,
-            601,
-            980,
-            640
-          ],
-          "text": "3 PLY ÉPAISSEURS",
-          "confidence": 0.9541938304901123,
-          "translated_segment": ""
-        },
-        {
-          "bbox": [
-            483,
-            612,
-            578,
-            637
-          ],
-          "text": "Jai",
-          "confidence": 0.41386178135871887,
-          "translated_segment": ""
-        },
-        {
-          "bbox": [
-            1018,
-            630,
-            1114,
-            644
-          ],
-          "text": "NYPOALLESO",
-          "confidence": 0.7399109601974487,
-          "translated_segment": "NYPOALLESO"
+          "confidence": 0.9705839902162552,
+          "translated_segment": "超柔软"
         }
       ]
     },
     {
       "bbox": [
-        484,
-        598,
-        605,
-        622
+        599,
+        532,
+        788,
+        562
       ],
-      "text": "164 T",
-      "translated_text": "164吨",
+      "text": "with lotion",
+      "translated_text": "含润肤露",
       "lines": [
         {
           "bbox": [
-            484,
-            598,
-            605,
-            622
+            599,
+            532,
+            788,
+            562
           ],
-          "text": "164 T",
-          "confidence": 0.7212813496589661,
-          "translated_segment": "164吨"
+          "text": "with lotion",
+          "confidence": 0.9775185585021973,
+          "translated_segment": "含润肤露"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        888,
+        543,
+        1075,
+        569
+      ],
+      "text": "avec lotion",
+      "translated_text": "含润肤露",
+      "lines": [
+        {
+          "bbox": [
+            888,
+            543,
+            1075,
+            569
+          ],
+          "text": "avec lotion",
+          "confidence": 0.9798781275749207,
+          "translated_segment": "含润肤露"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        488,
+        603,
+        552,
+        618
+      ],
+      "text": "104 TROYES",
+      "translated_text": "104 特洛伊",
+      "lines": [
+        {
+          "bbox": [
+            488,
+            603,
+            552,
+            618
+          ],
+          "text": "104 TROYES",
+          "confidence": 0.603473424911499,
+          "translated_segment": "104 特洛伊"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        785,
+        608,
+        977,
+        634
+      ],
+      "text": "3 PLY ÉPAISSEURS",
+      "translated_text": "三层结构",
+      "lines": [
+        {
+          "bbox": [
+            785,
+            608,
+            977,
+            634
+          ],
+          "text": "3 PLY ÉPAISSEURS",
+          "confidence": 0.9129337271054586,
+          "translated_segment": "三层结构"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        1017,
+        615,
+        1170,
+        647
+      ],
+      "text": "HYPOALLERGONIC WYPOALLENGE",
+      "translated_text": "低过敏性 WYPOALLENGE",
+      "lines": [
+        {
+          "bbox": [
+            1017,
+            615,
+            1170,
+            647
+          ],
+          "text": "HYPOALLERGONIC WYPOALLENGE",
+          "confidence": 0.7466727197170258,
+          "translated_segment": "低过敏性 WYPOALLENGE"
         }
       ]
     }

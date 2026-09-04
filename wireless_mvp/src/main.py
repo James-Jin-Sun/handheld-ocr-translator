@@ -4,13 +4,13 @@ Usage:
     python main.py --image path/to/photo.jpg --target-lang zh-CN
 
 Modules are organized as:
-    src/ocr/         OCR engines (incl. PaddleOCR), GT-based evaluation harness, text clean-up
+    src/ocr/         OCR engines (incl. Google Cloud Vision), GT-based evaluation harness, text clean-up
     src/translation/ Google Cloud Translation API wrapper
     src/overlay/     Blur source text + draw translated text on the image
 
-The OCR step uses PaddleOCR's "simple" mode (full detect+recognize pipeline),
-which already returns per-line bounding boxes and text -- no extra line
-grouping is needed (unlike Tesseract's word-level output).
+The OCR step uses Google Cloud Vision's document text detection, which
+returns per-paragraph bounding boxes and text -- no extra line grouping is
+needed (unlike Tesseract's word-level output).
 """
 
 import argparse
@@ -22,7 +22,7 @@ SRC_DIR = Path(__file__).resolve().parent
 for package_dir in ("ocr", "translation", "overlay"):
     sys.path.insert(0, str(SRC_DIR / package_dir))
 
-from paddleocr_backend import ocr_paddleocr_simple  # noqa: E402
+from google_vision_backend import ocr_google_vision_simple  # noqa: E402
 from text_cleaning import clean_ocr_text, group_lines_into_blocks  # noqa: E402
 from google_translate import DEFAULT_PROJECT_ID, DEFAULT_TARGET_LANGUAGE, translate_batch  # noqa: E402
 from draw_translation import save_translated_image, split_text_across_lines  # noqa: E402
@@ -30,18 +30,9 @@ from draw_translation import save_translated_image, split_text_across_lines  # n
 DEFAULT_OUTPUT_ROOT = SRC_DIR / "pipeline_results"
 
 
-class SimplePaddleConfig:
-    """Minimal duck-typed config for `ocr_paddleocr_simple`, which only
-    needs these two fields (see src/ocr/paddleocr_backend.py)."""
-
-    def __init__(self, lang="en", gpu=False):
-        self.paddleocr_lang = lang
-        self.paddleocr_gpu = gpu
-
-
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="PaddleOCR -> clean -> translate -> blur & overlay pipeline for a single image."
+        description="Google Cloud Vision -> clean -> translate -> blur & overlay pipeline for a single image."
     )
     parser.add_argument("--image", type=Path, required=True, help="Path to the input image.")
     parser.add_argument(
@@ -61,11 +52,11 @@ def parse_args():
         default=DEFAULT_PROJECT_ID,
         help="Google Cloud project ID used for Translation API calls.",
     )
-    parser.add_argument("--paddleocr-lang", default="en", help="PaddleOCR language code, e.g. `en` or `ch`.")
     parser.add_argument(
-        "--paddleocr-gpu",
-        action="store_true",
-        help="Use GPU for PaddleOCR if a CUDA-enabled paddlepaddle build is available.",
+        "--ocr-language-hints",
+        nargs="*",
+        default=None,
+        help="Optional Vision API language hint codes, e.g. `en` or `zh`.",
     )
     return parser.parse_args()
 
@@ -76,15 +67,13 @@ def run_pipeline(
     target_lang=DEFAULT_TARGET_LANGUAGE,
     source_lang=None,
     project_id=DEFAULT_PROJECT_ID,
-    paddleocr_lang="en",
-    paddleocr_gpu=False,
+    ocr_language_hints=None,
 ):
     output_dir = output_dir or (DEFAULT_OUTPUT_ROOT / image_path.stem)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1) OCR: PaddleOCR's full detect+recognize pipeline, one region per line.
-    paddle_config = SimplePaddleConfig(lang=paddleocr_lang, gpu=paddleocr_gpu)
-    _, ocr_runtime, region_rows = ocr_paddleocr_simple(image_path, paddle_config)
+    # 1) OCR: Google Cloud Vision's document text detection, one region per paragraph.
+    _, ocr_runtime, region_rows = ocr_google_vision_simple(image_path, language_hints=ocr_language_hints)
 
     # 2) Text cleaning: strip OCR noise, drop lines that clean to nothing,
     #    then merge stacked lines into sentence blocks so the translator sees
@@ -95,9 +84,11 @@ def run_pipeline(
         if text:
             lines_detected.append({"bbox": row["bbox"], "text": text, "confidence": row["confidence"]})
 
+    print(f"OCR (Google Vision) took {ocr_runtime:.2f}s.")
+
     if not lines_detected:
         print("No text detected.")
-        return None
+        return None, ocr_runtime
 
     blocks = group_lines_into_blocks(lines_detected)
 
@@ -129,8 +120,7 @@ def run_pipeline(
 
     manifest = {
         "image": str(image_path),
-        "ocr_engine": "paddleocr_simple",
-        "paddleocr_lang": paddleocr_lang,
+        "ocr_engine": "google_vision",
         "target_language": target_lang,
         "source_language": source_lang,
         "ocr_runtime_seconds": ocr_runtime,
@@ -160,7 +150,7 @@ def run_pipeline(
         print(f"  - {block['text']!r} -> {translation!r}")
     print(f"Saved translated image to {saved_path}")
     print(f"Saved region manifest to {manifest_path}")
-    return saved_path
+    return saved_path, ocr_runtime
 
 
 def main():
@@ -171,8 +161,7 @@ def main():
         target_lang=args.target_lang,
         source_lang=args.source_lang,
         project_id=args.project_id,
-        paddleocr_lang=args.paddleocr_lang,
-        paddleocr_gpu=args.paddleocr_gpu,
+        ocr_language_hints=args.ocr_language_hints,
     )
 
 

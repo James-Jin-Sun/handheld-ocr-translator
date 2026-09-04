@@ -1,0 +1,32 @@
+{
+  "image": "laptop_mvp\\src\\ui\\captures\\capture_20260720_113343.jpg",
+  "ocr_engine": "google_vision",
+  "target_language": "zh-CN",
+  "source_language": null,
+  "ocr_runtime_seconds": 0.9882463999965694,
+  "blocks": [
+    {
+      "bbox": [
+        121,
+        196,
+        574,
+        303
+      ],
+      "text": "CHANEL",
+      "translated_text": "香奈儿",
+      "lines": [
+        {
+          "bbox": [
+            121,
+            196,
+            574,
+            303
+          ],
+          "text": "CHANEL",
+          "confidence": 0.9840688109397888,
+          "translated_segment": "香奈儿"
+        }
+      ]
+    }
+  ]
+}

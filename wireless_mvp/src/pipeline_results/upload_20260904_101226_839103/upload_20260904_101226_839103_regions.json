@@ -1,0 +1,78 @@
+{
+  "image": "D:\\Handheld OCR Translator\\handheld-ocr-translator\\wireless_mvp\\src\\api\\uploads\\upload_20260904_101226_839103.jpg",
+  "ocr_engine": "google_vision",
+  "target_language": "zh-CN",
+  "source_language": null,
+  "ocr_runtime_seconds": 1.1525677999889012,
+  "blocks": [
+    {
+      "bbox": [
+        37,
+        51,
+        919,
+        445
+      ],
+      "text": "Tiredness kills",
+      "translated_text": "疲劳会致命",
+      "lines": [
+        {
+          "bbox": [
+            37,
+            51,
+            919,
+            445
+          ],
+          "text": "Tiredness kills",
+          "confidence": 0.9793375134468079,
+          "translated_segment": "疲劳会致命"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        0,
+        698,
+        938,
+        840
+      ],
+      "text": "A short break",
+      "translated_text": "短暂休息",
+      "lines": [
+        {
+          "bbox": [
+            0,
+            698,
+            938,
+            840
+          ],
+          "text": "A short break",
+          "confidence": 0.9681835373242696,
+          "translated_segment": "短暂休息"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        86,
+        877,
+        837,
+        1238
+      ],
+      "text": "could save your life",
+      "translated_text": "可能会救你一命",
+      "lines": [
+        {
+          "bbox": [
+            86,
+            877,
+            837,
+            1238
+          ],
+          "text": "could save your life",
+          "confidence": 0.9738960713148117,
+          "translated_segment": "可能会救你一命"
+        }
+      ]
+    }
+  ]
+}

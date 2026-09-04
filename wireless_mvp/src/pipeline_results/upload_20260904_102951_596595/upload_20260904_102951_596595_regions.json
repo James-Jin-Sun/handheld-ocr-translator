@@ -1,0 +1,32 @@
+{
+  "image": "D:\\Handheld OCR Translator\\handheld-ocr-translator\\wireless_mvp\\src\\api\\uploads\\upload_20260904_102951_596595.jpg",
+  "ocr_engine": "google_vision",
+  "target_language": "zh-CN",
+  "source_language": null,
+  "ocr_runtime_seconds": 1.0778900999866892,
+  "blocks": [
+    {
+      "bbox": [
+        44,
+        300,
+        524,
+        395
+      ],
+      "text": "London",
+      "translated_text": "伦敦",
+      "lines": [
+        {
+          "bbox": [
+            44,
+            300,
+            524,
+            395
+          ],
+          "text": "London",
+          "confidence": 0.6416250467300415,
+          "translated_segment": "伦敦"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+    "name": "Handheld OCR Translator",
+    "short_name": "OCR Translator",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0175C2",
+    "theme_color": "#0175C2",
+    "description": "Flutter Web frontend for the Handheld OCR Translator backend.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": []
+}

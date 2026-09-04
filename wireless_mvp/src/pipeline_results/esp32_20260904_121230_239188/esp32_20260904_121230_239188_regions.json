@@ -1,0 +1,158 @@
+{
+  "image": "D:\\Handheld OCR Translator\\handheld-ocr-translator\\wireless_mvp\\src\\api\\uploads\\esp32_20260904_121230_239188.jpg",
+  "ocr_engine": "google_vision",
+  "target_language": "zh-CN",
+  "source_language": null,
+  "ocr_runtime_seconds": 1.7897651999955997,
+  "blocks": [
+    {
+      "bbox": [
+        236,
+        37,
+        470,
+        82
+      ],
+      "text": "MSKENZIE",
+      "translated_text": "麦肯齐",
+      "lines": [
+        {
+          "bbox": [
+            236,
+            37,
+            470,
+            82
+          ],
+          "text": "MSKENZIE",
+          "confidence": 0.9495745897293091,
+          "translated_segment": "麦肯齐"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        238,
+        76,
+        292,
+        89
+      ],
+      "text": "CANADA",
+      "translated_text": "加拿大",
+      "lines": [
+        {
+          "bbox": [
+            238,
+            76,
+            292,
+            89
+          ],
+          "text": "CANADA",
+          "confidence": 0.9893028140068054,
+          "translated_segment": "加拿大"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        394,
+        83,
+        469,
+        100
+      ],
+      "text": "EST . 1896",
+      "translated_text": "成立于1896年",
+      "lines": [
+        {
+          "bbox": [
+            394,
+            83,
+            469,
+            100
+          ],
+          "text": "EST . 1896",
+          "confidence": 0.858728845914205,
+          "translated_segment": "成立于1896年"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        249,
+        153,
+        459,
+        247
+      ],
+      "text": "WILDFLOWERS All Purpose FLEURS SAUVAGES",
+      "translated_text": "野花 通用野花",
+      "lines": [
+        {
+          "bbox": [
+            249,
+            153,
+            459,
+            247
+          ],
+          "text": "WILDFLOWERS All Purpose FLEURS SAUVAGES",
+          "confidence": 0.9422796607017517,
+          "translated_segment": "野花 通用野花"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        290,
+        249,
+        420,
+        270
+      ],
+      "text": "Tout Usage",
+      "translated_text": "多用途",
+      "lines": [
+        {
+          "bbox": [
+            290,
+            249,
+            420,
+            270
+          ],
+          "text": "Tout Usage",
+          "confidence": 0.9530293047428131,
+          "translated_segment": "多用途"
+        }
+      ]
+    },
+    {
+      "bbox": [
+        374,
+        288,
+        464,
+        312
+      ],
+      "text": "BEE FRIENDLY AMIES DES ABEILLES",
+      "translated_text": "蜜蜂友好型朋友",
+      "lines": [
+        {
+          "bbox": [
+            409,
+            288,
+            464,
+            297
+          ],
+          "text": "BEE FRIENDLY",
+          "confidence": 0.798095315694809,
+          "translated_segment": "蜜蜂友"
+        },
+        {
+          "bbox": [
+            374,
+            300,
+            464,
+            312
+          ],
+          "text": "AMIES DES ABEILLES",
+          "confidence": 0.7632132172584534,
+          "translated_segment": "好型朋友"
+        }
+      ]
+    }
+  ]
+}

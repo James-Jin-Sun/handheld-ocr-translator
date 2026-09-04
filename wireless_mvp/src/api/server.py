@@ -5,6 +5,14 @@ does not duplicate any OCR, translation, or overlay logic. The existing
 Tkinter desktop app (src/ui/app.py) is untouched and keeps working alongside
 this server.
 
+Two image sources are supported, both feeding the same pipeline:
+  - POST /api/process: laptop file upload (unchanged).
+  - POST /api/capture: pulls one JPEG from an ESP32-S3 camera's own
+    `GET /capture` endpoint (wireless_mvp/firmware/esp32_camera) instead of
+    an uploaded file. The ESP32 never talks to Google APIs and never
+    receives Google credentials -- it only ever returns a raw JPEG to this
+    backend, which is the sole caller of the Google Cloud APIs.
+
 Usage:
     python api/server.py
     # then POST an image to http://localhost:8000/api/process
@@ -16,13 +24,18 @@ from datetime import datetime
 from pathlib import Path
 
 try:
+    import requests
     from fastapi import FastAPI, File, Form, HTTPException, UploadFile
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import FileResponse, JSONResponse
 except ImportError as exc:
     raise SystemExit(
-        "Missing dependency: install it with `pip install fastapi uvicorn[standard] python-multipart`."
+        "Missing dependency: install it with `pip install fastapi uvicorn[standard] python-multipart requests`."
     ) from exc
+
+# Timeout for pulling a single frame from the ESP32 -- capture + Wi-Fi upload
+# of one JPEG should be quick, but the sensor can occasionally stall.
+ESP32_CAPTURE_TIMEOUT_SECONDS = 15
 
 API_DIR = Path(__file__).resolve().parent
 SRC_DIR = API_DIR.parent
@@ -73,24 +86,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/api/process")
-def process_image(
-    image: UploadFile = File(...),
-    target_lang: str = Form(None),
-    source_lang: str = Form(None),
-    project_id: str = Form(None),
-    ocr_language_hints: str = Form(None),  # comma-separated, e.g. "en,fr"
-):
-    """Run the existing OCR -> translate -> overlay pipeline on an uploaded
-    image and return job info; the translated image and manifest are then
-    fetched via the `/api/results/{job_id}/...` endpoints below."""
-    pipeline = _get_pipeline()
-
-    suffix = Path(image.filename or "").suffix or ".jpg"
-    job_id = f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
-    upload_path = UPLOADS_DIR / f"{job_id}{suffix}"
-    upload_path.write_bytes(image.file.read())
-
+def _pipeline_kwargs(target_lang, source_lang, project_id, ocr_language_hints):
     kwargs = {}
     if target_lang:
         kwargs["target_lang"] = target_lang
@@ -100,9 +96,16 @@ def process_image(
         kwargs["project_id"] = project_id
     if ocr_language_hints:
         kwargs["ocr_language_hints"] = [hint.strip() for hint in ocr_language_hints.split(",") if hint.strip()]
+    return kwargs
+
+
+def _run_pipeline_and_build_response(job_id, image_path, kwargs):
+    """Shared by /api/process and /api/capture: run the existing pipeline
+    on an already-saved image and build the same response shape for both."""
+    pipeline = _get_pipeline()
 
     try:
-        saved_path, ocr_runtime = pipeline.run_pipeline(upload_path, **kwargs)
+        saved_path, ocr_runtime = pipeline.run_pipeline(image_path, **kwargs)
     except Exception as exc:  # noqa: BLE001 - surface any pipeline failure to the caller
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -116,6 +119,55 @@ def process_image(
         "translated_image_url": f"/api/results/{job_id}/image",
         "manifest_url": f"/api/results/{job_id}/manifest",
     }
+
+
+@app.post("/api/process")
+def process_image(
+    image: UploadFile = File(...),
+    target_lang: str = Form(None),
+    source_lang: str = Form(None),
+    project_id: str = Form(None),
+    ocr_language_hints: str = Form(None),  # comma-separated, e.g. "en,fr"
+):
+    """Run the existing OCR -> translate -> overlay pipeline on an uploaded
+    image and return job info; the translated image and manifest are then
+    fetched via the `/api/results/{job_id}/...` endpoints below."""
+    suffix = Path(image.filename or "").suffix or ".jpg"
+    job_id = f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+    upload_path = UPLOADS_DIR / f"{job_id}{suffix}"
+    upload_path.write_bytes(image.file.read())
+
+    kwargs = _pipeline_kwargs(target_lang, source_lang, project_id, ocr_language_hints)
+    return _run_pipeline_and_build_response(job_id, upload_path, kwargs)
+
+
+@app.post("/api/capture")
+def capture_and_process(
+    esp32_url: str = Form(...),  # e.g. "http://192.168.1.42" or "http://esp32cam.local"
+    target_lang: str = Form(None),
+    source_lang: str = Form(None),
+    project_id: str = Form(None),
+    ocr_language_hints: str = Form(None),  # comma-separated, e.g. "en,fr"
+):
+    """Pull one JPEG frame from the ESP32-S3 camera's own `GET /capture`
+    endpoint (wireless_mvp/firmware/esp32_camera), then run it through the
+    same OCR -> translate -> overlay pipeline as /api/process. The ESP32's
+    address is supplied by the caller per-request -- it is never hardcoded
+    here, and this backend remains the only component that talks to Google
+    Cloud (the ESP32 and Flutter never do, and never see credentials)."""
+    capture_url = esp32_url.rstrip("/") + "/capture"
+    try:
+        response = requests.get(capture_url, timeout=ESP32_CAPTURE_TIMEOUT_SECONDS)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach ESP32 camera at {capture_url}: {exc}") from exc
+
+    job_id = f"esp32_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+    capture_path = UPLOADS_DIR / f"{job_id}.jpg"
+    capture_path.write_bytes(response.content)
+
+    kwargs = _pipeline_kwargs(target_lang, source_lang, project_id, ocr_language_hints)
+    return _run_pipeline_and_build_response(job_id, capture_path, kwargs)
 
 
 @app.get("/api/results/{job_id}/image")

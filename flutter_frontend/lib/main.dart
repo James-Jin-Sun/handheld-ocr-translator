@@ -8,9 +8,11 @@
 /// OCR -> translate -> overlay pipeline. This app only ever talks to that
 /// local backend -- it never calls Google Cloud APIs or holds credentials.
 ///
-/// Unlike the desktop app, this web build has no live camera feed or GPIO
-/// buttons -- "Frame 1" is a file-picker-only landing screen (mirrors the
-/// desktop app's own "no camera detected" fallback state).
+/// "Frame 1" has no browser-native live camera feed (unlike the desktop
+/// app's webcam view). Instead, "Capture Image" asks the backend to pull one
+/// JPEG from a wireless ESP32-S3 camera (wireless_mvp/firmware/esp32_camera)
+/// and run it through the pipeline directly; "Select Image" keeps the
+/// original laptop file-upload flow with its captured/confirm/retake step.
 library;
 
 import 'dart:typed_data';
@@ -19,11 +21,25 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'api_client.dart';
+import 'mjpeg_view_stub.dart' if (dart.library.html) 'mjpeg_view_web.dart';
 import 'models.dart';
 
 const String kDefaultBackendUrl = 'http://localhost:8000';
 const String kDefaultTargetLang = 'zh-CN';
-const String kNoCameraStatusText = "No camera detected. Use 'Select Image' to load a photo.";
+const String kNoCameraStatusText =
+    "No local camera. Set an ESP32-S3 camera URL in Settings to see a live view, or use 'Select Image' to upload a file.";
+const String kLiveCameraStatusText =
+    "Live view from the ESP32-S3 camera. Press 'Capture Image' when ready.";
+
+/// Live preview URL for the ESP32 firmware's MJPEG endpoint (a separate
+/// task/port from /capture and /status -- see wireless_mvp/firmware/esp32_camera),
+/// or null if no ESP32 camera URL is configured / it doesn't parse as a URL.
+String? _esp32StreamUrl(String esp32Url) {
+  if (esp32Url.isEmpty) return null;
+  final uri = Uri.tryParse(esp32Url);
+  if (uri == null || uri.host.isEmpty) return null;
+  return Uri(scheme: uri.scheme.isEmpty ? 'http' : uri.scheme, host: uri.host, port: 81, path: '/stream').toString();
+}
 
 void main() {
   runApp(const OcrTranslatorApp());
@@ -62,6 +78,7 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
   static const _imageAreaSize = Size(820, 560);
 
   final _backendUrlController = TextEditingController(text: kDefaultBackendUrl);
+  final _esp32UrlController = TextEditingController();
   final _targetLangController = TextEditingController(text: kDefaultTargetLang);
   final _sourceLangController = TextEditingController();
   final _ocrHintsController = TextEditingController();
@@ -81,13 +98,41 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
   @override
   void dispose() {
     _backendUrlController.dispose();
+    _esp32UrlController.dispose();
     _targetLangController.dispose();
     _sourceLangController.dispose();
     _ocrHintsController.dispose();
     super.dispose();
   }
 
-  // ---- Frame 1: image source (no live camera in this web build) ----
+  // ---- Frame 1: image source (ESP32-S3 wireless capture, or laptop file) ----
+
+  Future<void> _onCaptureImageClicked() async {
+    final esp32Url = _esp32UrlController.text.trim();
+    if (esp32Url.isEmpty) {
+      setState(() {
+        _statusMessage = "No ESP32 camera URL set -- add one in Settings, or use 'Select Image' instead.";
+        _statusWarning = true;
+      });
+      return;
+    }
+
+    setState(() {
+      _pickedBytes = null;
+      _pickedFilename = null;
+    });
+
+    await _runPipelineRequest(
+      () => _client.captureFromEsp32(
+        esp32Url: esp32Url,
+        targetLang: _targetLangController.text,
+        sourceLang: _sourceLangController.text,
+        ocrLanguageHints: _parseHints(),
+      ),
+      fallbackScreen: _Screen.camera,
+      fallbackStatusMessage: kNoCameraStatusText,
+    );
+  }
 
   Future<void> _onSelectImageClicked() async {
     final result = await FilePicker.platform.pickFiles(
@@ -124,9 +169,14 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
       _screen = _Screen.camera;
       _pickedBytes = null;
       _pickedFilename = null;
-      _statusMessage = kNoCameraStatusText;
-      _statusWarning = true;
+      _applyCameraScreenStatus();
     });
+  }
+
+  void _applyCameraScreenStatus() {
+    final hasLiveView = _esp32StreamUrl(_esp32UrlController.text.trim()) != null;
+    _statusMessage = hasLiveView ? kLiveCameraStatusText : kNoCameraStatusText;
+    _statusWarning = !hasLiveView;
   }
 
   List<String>? _parseHints() {
@@ -151,6 +201,27 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
     final filename = _pickedFilename;
     if (bytes == null || filename == null) return;
 
+    await _runPipelineRequest(
+      () => _client.processImage(
+        imageBytes: bytes,
+        filename: filename,
+        targetLang: _targetLangController.text,
+        sourceLang: _sourceLangController.text,
+        ocrLanguageHints: _parseHints(),
+      ),
+      fallbackScreen: _Screen.captured,
+      fallbackStatusMessage: 'Image selected. Confirm to translate, or retake.',
+    );
+  }
+
+  /// Shared by [_onConfirmClicked] (laptop upload) and [_onCaptureImageClicked]
+  /// (ESP32 wireless capture) -- both just supply a different backend call and
+  /// a different screen/message to fall back to on "no text"/error.
+  Future<void> _runPipelineRequest(
+    Future<ProcessResult> Function() request, {
+    required _Screen fallbackScreen,
+    required String fallbackStatusMessage,
+  }) async {
     setState(() {
       _screen = _Screen.processing;
       _statusMessage = 'Processing: OCR -> Translation -> Overlay... this can take up to a minute.';
@@ -158,24 +229,18 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
     });
 
     try {
-      final result = await _client.processImage(
-        imageBytes: bytes,
-        filename: filename,
-        targetLang: _targetLangController.text,
-        sourceLang: _sourceLangController.text,
-        ocrLanguageHints: _parseHints(),
-      );
+      final result = await request();
 
       if (!result.textDetected) {
         if (mounted) {
           await _showMessageDialog(
-            'No text was detected in the captured image.\nOCR took ${result.ocrRuntimeSeconds.toStringAsFixed(2)}s.',
+            'No text was detected in the image.\nOCR took ${result.ocrRuntimeSeconds.toStringAsFixed(2)}s.',
           );
         }
         if (!mounted) return;
         setState(() {
-          _screen = _Screen.captured;
-          _statusMessage = 'Image selected. Confirm to translate, or retake.';
+          _screen = fallbackScreen;
+          _statusMessage = fallbackStatusMessage;
           _statusWarning = false;
         });
         return;
@@ -197,8 +262,8 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
       if (mounted) await _showMessageDialog('Translation pipeline failed:\n$message');
       if (!mounted) return;
       setState(() {
-        _screen = _Screen.captured;
-        _statusMessage = 'Image selected. Confirm to translate, or retake.';
+        _screen = fallbackScreen;
+        _statusMessage = fallbackStatusMessage;
         _statusWarning = false;
       });
     }
@@ -233,8 +298,7 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
       _pickedFilename = null;
       _resultImageBytes = null;
       _manifest = null;
-      _statusMessage = kNoCameraStatusText;
-      _statusWarning = true;
+      _applyCameraScreenStatus();
     });
   }
 
@@ -252,6 +316,14 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
               TextField(
                 controller: _backendUrlController,
                 decoration: const InputDecoration(labelText: 'Backend URL', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _esp32UrlController,
+                decoration: const InputDecoration(
+                  labelText: 'ESP32 camera URL (e.g. http://192.168.1.42)',
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -281,6 +353,9 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
         actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Done'))],
       ),
     );
+    if (_screen == _Screen.camera) {
+      setState(_applyCameraScreenStatus);
+    }
   }
 
   @override
@@ -319,11 +394,14 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
     Widget content;
     switch (_screen) {
       case _Screen.camera:
-        content = const Text(
-          'LIVE CAMERA VIEW\n(no camera detected)',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white, fontSize: 20),
-        );
+        final streamUrl = _esp32StreamUrl(_esp32UrlController.text.trim());
+        content = streamUrl == null
+            ? const Text(
+                'LIVE CAMERA VIEW\n(no camera detected)',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 20),
+              )
+            : MjpegView(streamUrl: streamUrl);
         break;
       case _Screen.captured:
       case _Screen.processing:
@@ -359,9 +437,9 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
       case _Screen.camera:
         return Row(
           children: [
-            const Tooltip(
-              message: 'Live camera capture is not available in this web build -- use Select Image instead.',
-              child: FilledButton(onPressed: null, child: Text('Capture Image')),
+            Tooltip(
+              message: 'Pull a photo from the ESP32-S3 camera over Wi-Fi (configure its URL in Settings).',
+              child: FilledButton(onPressed: _onCaptureImageClicked, child: const Text('Capture Image')),
             ),
             const Spacer(),
             FilledButton(onPressed: _onSelectImageClicked, child: const Text('Select Image')),

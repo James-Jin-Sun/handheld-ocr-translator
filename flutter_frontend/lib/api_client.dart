@@ -64,6 +64,39 @@ class OcrApiClient {
     return ProcessResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  /// Asks the backend to pull one JPEG from the ESP32-S3 camera's own
+  /// `GET /capture` endpoint and run it through the same pipeline as
+  /// [processImage]. The Flutter app never talks to the ESP32 directly.
+  Future<ProcessResult> captureFromEsp32({
+    required String esp32Url,
+    String? targetLang,
+    String? sourceLang,
+    String? projectId,
+    List<String>? ocrLanguageHints,
+  }) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/api/capture'))
+      ..fields['esp32_url'] = esp32Url.trim();
+
+    if (targetLang != null && targetLang.trim().isNotEmpty) {
+      request.fields['target_lang'] = targetLang.trim();
+    }
+    if (sourceLang != null && sourceLang.trim().isNotEmpty) {
+      request.fields['source_lang'] = sourceLang.trim();
+    }
+    if (projectId != null && projectId.trim().isNotEmpty) {
+      request.fields['project_id'] = projectId.trim();
+    }
+    if (ocrLanguageHints != null && ocrLanguageHints.isNotEmpty) {
+      request.fields['ocr_language_hints'] = ocrLanguageHints.join(',');
+    }
+
+    final response = await http.Response.fromStream(await request.send());
+    if (response.statusCode != 200) {
+      throw OcrApiException(_extractDetail(response.body) ?? 'Request failed (HTTP ${response.statusCode}).');
+    }
+    return ProcessResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   Future<Uint8List> fetchResultImage(String relativeUrl) async {
     final response = await http.get(Uri.parse('$baseUrl$relativeUrl'));
     if (response.statusCode != 200) {

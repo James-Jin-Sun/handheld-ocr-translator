@@ -8,6 +8,6 @@ void main() {
 
     expect(find.text('Select Image'), findsOneWidget);
     expect(find.text('Capture Image'), findsOneWidget);
-    expect(find.textContaining('No camera detected'), findsOneWidget);
+    expect(find.textContaining('No local camera'), findsOneWidget);
   });
 }

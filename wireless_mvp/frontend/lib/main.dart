@@ -26,6 +26,7 @@ import 'models.dart';
 
 const String kDefaultBackendUrl = 'http://localhost:8000';
 const String kDefaultTargetLang = 'zh-CN';
+const String kDefaultESP32Url = 'http://esp32cam.local';
 const String kNoCameraStatusText =
     "No local camera. Set an ESP32-S3 camera URL in Settings to see a live view, or use 'Select Image' to upload a file.";
 const String kLiveCameraStatusText =
@@ -78,7 +79,7 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
   static const _imageAreaSize = Size(820, 560);
 
   final _backendUrlController = TextEditingController(text: kDefaultBackendUrl);
-  final _esp32UrlController = TextEditingController();
+  final _esp32UrlController = TextEditingController(text: kDefaultESP32Url);
   final _targetLangController = TextEditingController(text: kDefaultTargetLang);
   final _sourceLangController = TextEditingController();
   final _ocrHintsController = TextEditingController();
@@ -94,6 +95,12 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
   Manifest? _manifest;
 
   OcrApiClient get _client => OcrApiClient(baseUrl: _backendUrlController.text.trim());
+
+  @override
+  void initState() {
+    super.initState();
+    _applyCameraScreenStatus();
+  }
 
   @override
   void dispose() {

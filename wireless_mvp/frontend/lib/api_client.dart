@@ -1,5 +1,5 @@
 /// Thin HTTP client for the existing local FastAPI backend
-/// (wireless_mvp/src/api/server.py). This is the *only* network boundary --
+/// (wireless_mvp/backend/app/api/server.py). This is the *only* network boundary --
 /// the Flutter app never talks to Google Cloud or holds any credentials.
 library;
 

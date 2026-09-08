@@ -1,5 +1,5 @@
 /// Data models matching the JSON shapes returned by the FastAPI backend
-/// (see wireless_mvp/src/api/server.py and src/main.py's manifest output).
+/// (see wireless_mvp/backend/app/api/server.py and app/main.py's manifest output).
 library;
 
 class ProcessResult {

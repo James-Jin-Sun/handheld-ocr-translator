@@ -1,0 +1,9 @@
+# Generated pipeline output -- not source, safe to regenerate.
+backend/data/uploads/
+backend/data/pipeline_results/
+backend/data/translated_images/
+backend/tests/test_output/
+
+# Local env/config, never commit real credentials or Wi-Fi passwords.
+backend/.env
+firmware/esp32_camera/include/wifi_credentials.h

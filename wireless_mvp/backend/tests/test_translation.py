@@ -12,7 +12,10 @@ from pathlib import Path
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from google_translate import (
+TESTS_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(TESTS_DIR.parent / "app" / "translation"))
+
+from google_translate import (  # noqa: E402
     DEFAULT_LOCATION,
     DEFAULT_PROJECT_ID,
     DEFAULT_TARGET_LANGUAGE,

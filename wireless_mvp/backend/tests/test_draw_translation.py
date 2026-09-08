@@ -8,9 +8,13 @@ Usage:
     python test_draw_translation.py
 """
 
+import sys
 from pathlib import Path
 
-from draw_translation import save_translated_image
+TESTS_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(TESTS_DIR.parent / "app" / "overlay"))
+
+from draw_translation import save_translated_image  # noqa: E402
 
 IMAGE_PATH = Path(r"D:\Handheld OCR Translator\Icdar2013\Challenge2_Test_Task12_Images\img_1.jpg")
 OUTPUT_DIR = Path(__file__).resolve().parent / "test_output"

@@ -6,7 +6,7 @@
  *   GET :80/status  -> {"status":"ok"} liveness check
  *   GET :81/stream  -> MJPEG live preview (multipart/x-mixed-replace)
  *
- * so wireless_mvp/src/api/server.py can pull an image on demand, as an
+ * so wireless_mvp/backend/app/api/server.py can pull an image on demand, as an
  * alternative to the existing laptop file-upload path, and the Flutter Web
  * frontend can show a live preview. The stream runs on its own port/task so
  * a long-lived streaming client can't block /capture or /status. Never

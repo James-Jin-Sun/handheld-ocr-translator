@@ -1,0 +1,19 @@
+# Core dependencies to run the FastAPI backend (app/api/server.py) and the
+# OCR -> translate -> overlay pipeline it wraps (app/main.py).
+fastapi
+uvicorn[standard]
+python-multipart
+requests
+google-cloud-vision
+google-cloud-translate
+pillow
+
+# Only needed if you also run the OCR evaluation/benchmark harness in
+# app/ocr/evaluate.py (comparing Tesseract/EasyOCR/PaddleOCR against the
+# ICDAR2013 ground truth) -- not required by the running API server.
+# numpy
+# opencv-python
+# pytesseract
+# easyocr
+# paddleocr
+# paddlepaddle

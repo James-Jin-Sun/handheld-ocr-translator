@@ -1,9 +1,7 @@
 """Local HTTP API exposing the existing OCR -> translate -> overlay pipeline
-(src/main.py) so a future Flutter Web frontend (or any HTTP client) can call
-it. This is a thin wrapper only -- it reuses `main.run_pipeline` as-is and
-does not duplicate any OCR, translation, or overlay logic. The existing
-Tkinter desktop app (src/ui/app.py) is untouched and keeps working alongside
-this server.
+(app/main.py) so a Flutter Web frontend (or any HTTP client) can call it.
+This is a thin wrapper only -- it reuses `main.run_pipeline` as-is and does
+not duplicate any OCR, translation, or overlay logic.
 
 Two image sources are supported, both feeding the same pipeline:
   - POST /api/process: laptop file upload (unchanged).
@@ -14,7 +12,7 @@ Two image sources are supported, both feeding the same pipeline:
     backend, which is the sole caller of the Google Cloud APIs.
 
 Usage:
-    python api/server.py
+    python -m app.api.server
     # then POST an image to http://localhost:8000/api/process
 """
 
@@ -38,11 +36,12 @@ except ImportError as exc:
 ESP32_CAPTURE_TIMEOUT_SECONDS = 15
 
 API_DIR = Path(__file__).resolve().parent
-SRC_DIR = API_DIR.parent
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+APP_DIR = API_DIR.parent
+BACKEND_DIR = APP_DIR.parent
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
 
-UPLOADS_DIR = API_DIR / "uploads"
+UPLOADS_DIR = BACKEND_DIR / "data" / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Handheld OCR Translator API")
@@ -59,7 +58,7 @@ app.add_middleware(
 
 # `main` (the pipeline module) pulls in the Google Cloud client libraries,
 # which are slow to import -- load it lazily on first request, same as
-# src/ui/pipeline_worker.py does for the desktop app, instead of at startup.
+# laptop_mvp/src/ui/pipeline_worker.py does for the desktop app, instead of at startup.
 _pipeline_lock = threading.Lock()
 _pipeline = None
 

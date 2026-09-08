@@ -1,10 +1,10 @@
 /// Flutter Web frontend for the Handheld OCR Translator.
 ///
-/// Mirrors the Tkinter desktop UI's (wireless_mvp/src/ui/app.py) three-screen
+/// Mirrors the Tkinter desktop UI's (laptop_mvp/src/ui/app.py) three-screen
 /// flow -- image source -> captured/selected -> translated -- including its
 /// dark theme, single large image area, status bar, and bottom-left/right
 /// action buttons. Calls the existing local FastAPI backend
-/// (wireless_mvp/src/api/server.py) which in turn reuses the existing
+/// (wireless_mvp/backend/app/api/server.py) which in turn reuses the existing
 /// OCR -> translate -> overlay pipeline. This app only ever talks to that
 /// local backend -- it never calls Google Cloud APIs or holds credentials.
 ///

@@ -4,9 +4,9 @@ Usage:
     python main.py --image path/to/photo.jpg --target-lang zh-CN
 
 Modules are organized as:
-    src/ocr/         OCR engines (incl. Google Cloud Vision), GT-based evaluation harness, text clean-up
-    src/translation/ Google Cloud Translation API wrapper
-    src/overlay/     Blur source text + draw translated text on the image
+    app/ocr/         OCR engines (incl. Google Cloud Vision), GT-based evaluation harness, text clean-up
+    app/translation/ Google Cloud Translation API wrapper
+    app/overlay/     Blur source text + draw translated text on the image
 
 The OCR step uses Google Cloud Vision's document text detection, which
 returns per-paragraph bounding boxes and text -- no extra line grouping is
@@ -18,16 +18,17 @@ import json
 import sys
 from pathlib import Path
 
-SRC_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = APP_DIR.parent
 for package_dir in ("ocr", "translation", "overlay"):
-    sys.path.insert(0, str(SRC_DIR / package_dir))
+    sys.path.insert(0, str(APP_DIR / package_dir))
 
 from google_vision_backend import ocr_google_vision_simple  # noqa: E402
 from text_cleaning import clean_ocr_text, group_lines_into_blocks  # noqa: E402
 from google_translate import DEFAULT_PROJECT_ID, DEFAULT_TARGET_LANGUAGE, translate_batch  # noqa: E402
 from draw_translation import save_translated_image, split_text_across_lines  # noqa: E402
 
-DEFAULT_OUTPUT_ROOT = SRC_DIR / "pipeline_results"
+DEFAULT_OUTPUT_ROOT = BACKEND_DIR / "data" / "pipeline_results"
 
 
 def parse_args():
@@ -39,7 +40,7 @@ def parse_args():
         "--output-dir",
         type=Path,
         default=None,
-        help="Folder to save results in. Defaults to `src/pipeline_results/<image_stem>/`.",
+        help="Folder to save results in. Defaults to `backend/data/pipeline_results/<image_stem>/`.",
     )
     parser.add_argument(
         "--target-lang",

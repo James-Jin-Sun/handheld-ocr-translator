@@ -15,6 +15,7 @@
 /// original laptop file-upload flow with its captured/confirm/retake step.
 library;
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -94,16 +95,21 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
   Uint8List? _resultImageBytes;
   Manifest? _manifest;
 
+  Timer? _buttonPollTimer;
+  int? _lastButtonCaptureCount;
+
   OcrApiClient get _client => OcrApiClient(baseUrl: _backendUrlController.text.trim());
 
   @override
   void initState() {
     super.initState();
     _applyCameraScreenStatus();
+    _buttonPollTimer = Timer.periodic(const Duration(seconds: 1), (_) => _pollPhysicalButton());
   }
 
   @override
   void dispose() {
+    _buttonPollTimer?.cancel();
     _backendUrlController.dispose();
     _esp32UrlController.dispose();
     _targetLangController.dispose();
@@ -113,6 +119,27 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
   }
 
   // ---- Frame 1: image source (ESP32-S3 wireless capture, or laptop file) ----
+
+  /// The ESP32's physical GPIO21 button has no way to push a result to this
+  /// app, so this polls its `button_capture_count` (see `fetchEsp32ButtonPressCount`)
+  /// and, on a new press, calls the exact same [_onCaptureImageClicked] the
+  /// on-screen "Capture Image" button uses -- not a second implementation.
+  /// Only reacts while idle on the camera screen, so it can't overlap with
+  /// an in-flight capture (from either the button or the on-screen click).
+  Future<void> _pollPhysicalButton() async {
+    final esp32Url = _esp32UrlController.text.trim();
+    if (esp32Url.isEmpty) return;
+
+    final count = await _client.fetchEsp32ButtonPressCount(esp32Url);
+    if (count == null) return;
+
+    final previous = _lastButtonCaptureCount;
+    _lastButtonCaptureCount = count;
+
+    if (previous != null && count > previous && _screen == _Screen.camera) {
+      await _onCaptureImageClicked();
+    }
+  }
 
   Future<void> _onCaptureImageClicked() async {
     final esp32Url = _esp32UrlController.text.trim();

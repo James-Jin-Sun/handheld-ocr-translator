@@ -3,7 +3,7 @@
  *
  * Exposes a minimal HTTP server with:
  *   GET :80/capture -> one JPEG frame from the camera
- *   GET :80/status  -> {"status":"ok"} liveness check
+ *   GET :80/status  -> {"status":"ok","button_capture_count":N} liveness check
  *   GET :81/stream  -> MJPEG live preview (multipart/x-mixed-replace)
  *
  * so wireless_mvp/backend/app/api/server.py can pull an image on demand, as an
@@ -12,6 +12,13 @@
  * a long-lived streaming client can't block /capture or /status. Never
  * talks to Google APIs and never receives Google credentials -- it only
  * returns raw JPEG data to callers.
+ *
+ * A momentary push button on GPIO21 (active-low, to GND) offers a second
+ * way to trigger a capture alongside Flutter's on-screen button: it only
+ * increments button_capture_count above, which the Flutter frontend polls
+ * and reacts to by calling the same capture workflow the on-screen button
+ * uses (see _pollPhysicalButton in wireless_mvp/frontend/lib/main.dart) --
+ * this file never calls out to the backend itself.
  *
  * Wi-Fi credentials are NOT stored in this file -- copy
  * include/wifi_credentials.h.example to include/wifi_credentials.h (which is
@@ -39,6 +46,27 @@ namespace {
 constexpr char kMdnsHostname[] = "esp32cam";
 
 constexpr uint16_t kStreamPort = 81;
+
+// Physical capture button: momentary switch between GPIO21 and GND
+// (active-low). Assumes an external pull-up resistor on GPIO21 -- plain
+// INPUT (not INPUT_PULLUP) is used here as specified; released must read
+// HIGH and pressed must read LOW for the edge detection below to work.
+constexpr uint8_t kCaptureButtonPin = 21;
+constexpr unsigned long kButtonDebounceMs = 50;
+
+// Bumped once per debounced HIGH->LOW press, exposed on the existing
+// GET /status JSON so the Flutter frontend can detect a physical press by
+// polling and then reuse its normal ESP32 capture-and-OCR workflow (see
+// wireless_mvp/frontend/lib/main.dart, _pollPhysicalButton) instead of a
+// second, duplicated capture/upload path here on the ESP32.
+volatile uint32_t g_buttonCaptureCount = 0;
+int g_buttonLastRawState = HIGH;
+int g_buttonDebouncedState = HIGH;
+unsigned long g_buttonLastEdgeMs = 0;
+
+// Set for the duration of handleCapture() so a button press received while
+// this ESP32 is already serving a /capture request is ignored, not queued.
+volatile bool g_captureInProgress = false;
 
 WebServer server(80);
 WiFiServer streamServer(kStreamPort);
@@ -152,6 +180,7 @@ void configureCamera() {
 }
 
 void handleCapture() {
+  g_captureInProgress = true;
   camera_fb_t *fb = nullptr;
   uint8_t *jpg_buf = nullptr;
   size_t jpg_len = 0;
@@ -168,24 +197,61 @@ void handleCapture() {
     } else {
       server.send(503, "text/plain", "Camera capture failed");
     }
+    g_captureInProgress = false;
     return;
   }
+  Serial.println("Image captured");
 
   WiFiClient client = server.client();
   server.setContentLength(jpg_len);
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.send(200, "image/jpeg", "");
-  client.write(jpg_buf, jpg_len);
+  size_t written = client.write(jpg_buf, jpg_len);
+  if (written == jpg_len) {
+    Serial.println("Image upload successful");
+  } else {
+    Serial.printf("Image upload failed: sent %u of %u bytes\n", static_cast<unsigned>(written),
+                  static_cast<unsigned>(jpg_len));
+  }
 
   if (needs_free) {
     free(jpg_buf);
   }
   esp_camera_fb_return(fb);
+  g_captureInProgress = false;
 }
 
 void handleStatus() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.send(200, "application/json", "{\"status\":\"ok\"}");
+  String body = "{\"status\":\"ok\",\"button_capture_count\":" + String(g_buttonCaptureCount) + "}";
+  server.send(200, "application/json", body);
+}
+
+// Polls GPIO21 for a HIGH->LOW edge (no ISR), debounced by kButtonDebounceMs
+// so a single press or a held-down button only ever registers one press.
+// Never touches the camera or network directly -- it only increments a
+// counter that GET /status exposes, so the actual capture-and-OCR workflow
+// stays entirely in the existing /capture path (see handleCapture() above
+// and _pollPhysicalButton in the Flutter frontend).
+void pollCaptureButton() {
+  int reading = digitalRead(kCaptureButtonPin);
+
+  if (reading != g_buttonLastRawState) {
+    g_buttonLastEdgeMs = millis();
+    g_buttonLastRawState = reading;
+  }
+
+  if (millis() - g_buttonLastEdgeMs > kButtonDebounceMs && reading != g_buttonDebouncedState) {
+    g_buttonDebouncedState = reading;
+    if (g_buttonDebouncedState == LOW) {
+      Serial.println("Physical capture button pressed");
+      if (g_captureInProgress) {
+        Serial.println("Capture already in progress, ignoring button press");
+      } else {
+        g_buttonCaptureCount++;
+      }
+    }
+  }
 }
 
 // Serves MJPEG (multipart/x-mixed-replace) on its own port/task using a raw
@@ -251,6 +317,8 @@ void setup() {
   Serial.setDebugOutput(true);
   Serial.println();
 
+  pinMode(kCaptureButtonPin, INPUT);
+
   configureCamera();
 
   WiFi.mode(WIFI_STA);
@@ -280,4 +348,5 @@ void setup() {
 
 void loop() {
   server.handleClient();
+  pollCaptureButton();
 }

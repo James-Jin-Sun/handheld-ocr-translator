@@ -3,7 +3,8 @@
  *
  * Exposes a minimal HTTP server with:
  *   GET :80/capture -> one JPEG frame from the camera
- *   GET :80/status  -> {"status":"ok","button_capture_count":N} liveness check
+ *   GET :80/status  -> {"status":"ok","left_button_count":N,"right_button_count":N}
+ *                      liveness check
  *   GET :81/stream  -> MJPEG live preview (multipart/x-mixed-replace)
  *
  * so wireless_mvp/backend/app/api/server.py can pull an image on demand, as an
@@ -13,12 +14,14 @@
  * talks to Google APIs and never receives Google credentials -- it only
  * returns raw JPEG data to callers.
  *
- * A momentary push button on GPIO21 (active-low, to GND) offers a second
- * way to trigger a capture alongside Flutter's on-screen button: it only
- * increments button_capture_count above, which the Flutter frontend polls
- * and reacts to by calling the same capture workflow the on-screen button
- * uses (see _pollPhysicalButton in wireless_mvp/frontend/lib/main.dart) --
- * this file never calls out to the backend itself.
+ * Two momentary push buttons (active-low, to GND, using the ESP32's
+ * internal pull-ups) mirror the Flutter UI's left/right on-screen buttons:
+ * GPIO21 = left, GPIO41 = right. Each only increments its own press count
+ * above -- the Flutter frontend polls both and reacts by calling whichever
+ * action is currently shown on that side of the screen for the active UI
+ * state (see _pollPhysicalButtons / _onLeftButtonPressed / _onRightButtonPressed
+ * in wireless_mvp/frontend/lib/main.dart). This file never calls out to the
+ * backend itself and has no notion of "capture" vs. any other action.
  *
  * Wi-Fi credentials are NOT stored in this file -- copy
  * include/wifi_credentials.h.example to include/wifi_credentials.h (which is
@@ -47,22 +50,36 @@ constexpr char kMdnsHostname[] = "esp32cam";
 
 constexpr uint16_t kStreamPort = 81;
 
-// Physical capture button: momentary switch between GPIO21 and GND
-// (active-low). Assumes an external pull-up resistor on GPIO21 -- plain
-// INPUT (not INPUT_PULLUP) is used here as specified; released must read
-// HIGH and pressed must read LOW for the edge detection below to work.
-constexpr uint8_t kCaptureButtonPin = 21;
+// Physical UI buttons: two momentary switches to GND (active-low), using
+// the ESP32's internal pull-ups (INPUT_PULLUP) -- confirmed working on
+// hardware after an earlier external-pull-up attempt. GPIO21 is "left",
+// GPIO41 is "right"; the Flutter frontend maps each to whichever
+// on-screen button currently occupies that side for the active UI state,
+// so this file has no notion of what a press actually *does*.
+constexpr uint8_t kLeftButtonPin = 21;
+constexpr uint8_t kRightButtonPin = 41;
 constexpr unsigned long kButtonDebounceMs = 50;
 
-// Bumped once per debounced HIGH->LOW press, exposed on the existing
-// GET /status JSON so the Flutter frontend can detect a physical press by
-// polling and then reuse its normal ESP32 capture-and-OCR workflow (see
-// wireless_mvp/frontend/lib/main.dart, _pollPhysicalButton) instead of a
-// second, duplicated capture/upload path here on the ESP32.
-volatile uint32_t g_buttonCaptureCount = 0;
-int g_buttonLastRawState = HIGH;
-int g_buttonDebouncedState = HIGH;
-unsigned long g_buttonLastEdgeMs = 0;
+// Per-button debounce state. pressCount is bumped once per debounced
+// HIGH->LOW edge and exposed on the existing GET /status JSON so the
+// Flutter frontend can detect a physical press by polling (see
+// wireless_mvp/frontend/lib/main.dart, _pollPhysicalButtons) instead of a
+// second, duplicated action path here on the ESP32.
+struct DebouncedButton {
+  uint8_t pin;
+  volatile uint32_t pressCount = 0;
+  int lastRawState = HIGH;
+  int debouncedState = HIGH;
+  unsigned long lastEdgeMs = 0;
+
+  // Explicit constructor: a struct with default member initializers isn't
+  // an aggregate under the toolchain's C++ standard, so `{pin}` brace-init
+  // below needs this rather than relying on aggregate initialization.
+  explicit DebouncedButton(uint8_t button_pin) : pin(button_pin) {}
+};
+
+DebouncedButton g_leftButton(kLeftButtonPin);
+DebouncedButton g_rightButton(kRightButtonPin);
 
 // Set for the duration of handleCapture() so a button press received while
 // this ESP32 is already serving a /capture request is ignored, not queued.
@@ -223,35 +240,42 @@ void handleCapture() {
 
 void handleStatus() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
-  String body = "{\"status\":\"ok\",\"button_capture_count\":" + String(g_buttonCaptureCount) + "}";
+  String body = "{\"status\":\"ok\",\"left_button_count\":" + String(g_leftButton.pressCount) +
+                ",\"right_button_count\":" + String(g_rightButton.pressCount) + "}";
   server.send(200, "application/json", body);
 }
 
-// Polls GPIO21 for a HIGH->LOW edge (no ISR), debounced by kButtonDebounceMs
-// so a single press or a held-down button only ever registers one press.
-// Never touches the camera or network directly -- it only increments a
-// counter that GET /status exposes, so the actual capture-and-OCR workflow
-// stays entirely in the existing /capture path (see handleCapture() above
-// and _pollPhysicalButton in the Flutter frontend).
-void pollCaptureButton() {
-  int reading = digitalRead(kCaptureButtonPin);
+// Polls one button for a HIGH->LOW edge (no ISR), debounced by
+// kButtonDebounceMs so a single press or a held-down button only ever
+// registers one press. Never touches the camera or network directly -- it
+// only increments that button's counter, which GET /status exposes; the
+// actual action a press triggers is entirely up to the Flutter frontend
+// (see _pollPhysicalButtons / _onLeftButtonPressed / _onRightButtonPressed
+// in wireless_mvp/frontend/lib/main.dart).
+void pollButton(DebouncedButton &button, const char *label) {
+  int reading = digitalRead(button.pin);
 
-  if (reading != g_buttonLastRawState) {
-    g_buttonLastEdgeMs = millis();
-    g_buttonLastRawState = reading;
+  if (reading != button.lastRawState) {
+    button.lastEdgeMs = millis();
+    button.lastRawState = reading;
   }
 
-  if (millis() - g_buttonLastEdgeMs > kButtonDebounceMs && reading != g_buttonDebouncedState) {
-    g_buttonDebouncedState = reading;
-    if (g_buttonDebouncedState == LOW) {
-      Serial.println("Physical capture button pressed");
+  if (millis() - button.lastEdgeMs > kButtonDebounceMs && reading != button.debouncedState) {
+    button.debouncedState = reading;
+    if (button.debouncedState == LOW) {
+      Serial.printf("Physical %s button pressed (GPIO%u)\n", label, button.pin);
       if (g_captureInProgress) {
         Serial.println("Capture already in progress, ignoring button press");
       } else {
-        g_buttonCaptureCount++;
+        button.pressCount++;
       }
     }
   }
+}
+
+void pollButtons() {
+  pollButton(g_leftButton, "left");
+  pollButton(g_rightButton, "right");
 }
 
 // Serves MJPEG (multipart/x-mixed-replace) on its own port/task using a raw
@@ -317,7 +341,8 @@ void setup() {
   Serial.setDebugOutput(true);
   Serial.println();
 
-  pinMode(kCaptureButtonPin, INPUT);
+  pinMode(kLeftButtonPin, INPUT_PULLUP);
+  pinMode(kRightButtonPin, INPUT_PULLUP);
 
   configureCamera();
 
@@ -348,5 +373,5 @@ void setup() {
 
 void loop() {
   server.handleClient();
-  pollCaptureButton();
+  pollButtons();
 }

@@ -8,24 +8,26 @@
 /// OCR -> translate -> overlay pipeline. This app only ever talks to that
 /// local backend -- it never calls Google Cloud APIs or holds credentials.
 ///
-/// "Frame 1" has no browser-native live camera feed (unlike the desktop
-/// app's webcam view). Instead, "Capture Image" asks the backend to pull one
-/// JPEG from a wireless ESP32-S3 camera (wireless_mvp/firmware/esp32_camera)
-/// and run it through the pipeline directly; "Select Image" keeps the
-/// original laptop file-upload flow with its captured/confirm/retake step.
+/// "Frame 1" shows a live MJPEG preview from the ESP32-S3 `/stream` endpoint
+/// (web: HTML <img>; Android/MuMu: parsed JPEG frames). "Capture Image" asks
+/// the backend to pull one JPEG and run the pipeline; "Select Image" keeps
+/// the laptop file-upload flow with its captured/confirm/retake step.
 library;
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'api_client.dart';
-import 'mjpeg_view_stub.dart' if (dart.library.html) 'mjpeg_view_web.dart';
+import 'mjpeg_view_io.dart' if (dart.library.html) 'mjpeg_view_web.dart';
 import 'models.dart';
 
-const String kDefaultBackendUrl = 'http://localhost:8000';
+// On Android emulators (including MuMu), localhost is the emulator itself.
+// 10.0.2.2 is the host laptop, where the FastAPI backend listens on :8000.
+const String kDefaultBackendUrl =
+    kIsWeb ? 'http://localhost:8000' : 'http://10.0.2.2:8000';
 const String kDefaultTargetLang = 'zh-CN';
 const String kDefaultESP32Url = 'http://esp32cam.local';
 const String kNoCameraStatusText =
@@ -96,7 +98,8 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
   Manifest? _manifest;
 
   Timer? _buttonPollTimer;
-  int? _lastButtonCaptureCount;
+  int? _lastLeftButtonCount;
+  int? _lastRightButtonCount;
 
   OcrApiClient get _client => OcrApiClient(baseUrl: _backendUrlController.text.trim());
 
@@ -104,7 +107,7 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
   void initState() {
     super.initState();
     _applyCameraScreenStatus();
-    _buttonPollTimer = Timer.periodic(const Duration(seconds: 1), (_) => _pollPhysicalButton());
+    _buttonPollTimer = Timer.periodic(const Duration(seconds: 1), (_) => _pollPhysicalButtons());
   }
 
   @override
@@ -120,24 +123,69 @@ class _TranslatorHomePageState extends State<TranslatorHomePage> {
 
   // ---- Frame 1: image source (ESP32-S3 wireless capture, or laptop file) ----
 
-  /// The ESP32's physical GPIO21 button has no way to push a result to this
-  /// app, so this polls its `button_capture_count` (see `fetchEsp32ButtonPressCount`)
-  /// and, on a new press, calls the exact same [_onCaptureImageClicked] the
-  /// on-screen "Capture Image" button uses -- not a second implementation.
-  /// Only reacts while idle on the camera screen, so it can't overlap with
-  /// an in-flight capture (from either the button or the on-screen click).
-  Future<void> _pollPhysicalButton() async {
+  /// The ESP32's physical buttons have no way to push a result to this app,
+  /// so this polls `left_button_count`/`right_button_count` (see
+  /// `fetchEsp32ButtonPressCounts`) and, on a new press, dispatches to
+  /// whichever on-screen action currently occupies that side for the
+  /// active screen (see [_onLeftButtonPressed] / [_onRightButtonPressed]).
+  /// If both counts advance in the same poll, left is handled first and
+  /// right is deferred to the next poll rather than firing both at once.
+  Future<void> _pollPhysicalButtons() async {
     final esp32Url = _esp32UrlController.text.trim();
     if (esp32Url.isEmpty) return;
 
-    final count = await _client.fetchEsp32ButtonPressCount(esp32Url);
-    if (count == null) return;
+    final counts = await _client.fetchEsp32ButtonPressCounts(esp32Url);
+    if (counts == null) return;
 
-    final previous = _lastButtonCaptureCount;
-    _lastButtonCaptureCount = count;
+    final previousLeft = _lastLeftButtonCount;
+    final previousRight = _lastRightButtonCount;
+    _lastLeftButtonCount = counts.left;
+    _lastRightButtonCount = counts.right;
 
-    if (previous != null && count > previous && _screen == _Screen.camera) {
-      await _onCaptureImageClicked();
+    if (previousLeft != null && counts.left > previousLeft) {
+      await _onLeftButtonPressed();
+      return;
+    }
+    if (previousRight != null && counts.right > previousRight) {
+      await _onRightButtonPressed();
+    }
+  }
+
+  /// Mirrors whichever action [_buildControls] currently shows on the left
+  /// for the active screen. A no-op on [_Screen.processing], which shows no
+  /// buttons -- the press is still consumed above so it can't replay later.
+  Future<void> _onLeftButtonPressed() async {
+    switch (_screen) {
+      case _Screen.camera:
+        await _onCaptureImageClicked();
+        break;
+      case _Screen.captured:
+        await _onConfirmClicked();
+        break;
+      case _Screen.translated:
+        await _onSaveClicked();
+        break;
+      case _Screen.processing:
+        break;
+    }
+  }
+
+  /// Mirrors whichever action [_buildControls] currently shows on the right
+  /// for the active screen. A no-op on [_Screen.processing], which shows no
+  /// buttons -- the press is still consumed above so it can't replay later.
+  Future<void> _onRightButtonPressed() async {
+    switch (_screen) {
+      case _Screen.camera:
+        await _onSelectImageClicked();
+        break;
+      case _Screen.captured:
+        _onRetakeClicked();
+        break;
+      case _Screen.translated:
+        _onRestartClicked();
+        break;
+      case _Screen.processing:
+        break;
     }
   }
 

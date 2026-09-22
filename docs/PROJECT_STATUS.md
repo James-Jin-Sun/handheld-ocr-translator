@@ -155,26 +155,40 @@ nothing is hardcoded except the defaults (`localhost:8000`,
   `22636ae refractor backend`, `66ac815 move frontend to proper place`,
   `751d1ed integrated esp32_camera`, `e0a79db updated UI`,
   `14b45a5 created python backend`, `31a2056 replace PaddleOCR with Google Vision`.
-- **Active uncommitted work as of this writing**: a physical capture button
-  on ESP32 GPIO21. This is code-complete on both ends, not just planned:
-  - Firmware (`main.cpp`): `pollCaptureButton()` debounces GPIO21
-    (active-low, momentary switch to GND, external pull-up assumed) and
-    increments `g_buttonCaptureCount`, exposed via the existing `/status`
-    endpoint as `button_capture_count`. A press received mid-capture
-    (`g_captureInProgress`) is dropped, not queued. The firmware never
-    calls the backend itself.
+- **Active uncommitted work as of this writing**: two physical UI buttons
+  on the ESP32, generalized to mirror whichever on-screen action is
+  currently shown on that side of the Flutter UI (not fixed to "capture"
+  anymore). Code-complete on both ends:
+  - Firmware (`main.cpp`): GPIO21 = "left", GPIO41 = "right", both wired
+    with the ESP32's **internal** pull-up (`INPUT_PULLUP`) — confirmed
+    working on real hardware for GPIO21 after an earlier external-pull-up
+    attempt; GPIO41 is not yet hardware-tested. A shared `DebouncedButton`
+    struct + `pollButton()`/`pollButtons()` debounce each independently
+    and bump its own `pressCount`, exposed via `/status` as
+    `{"status":"ok","left_button_count":N,"right_button_count":N}`. A
+    press received mid-capture (`g_captureInProgress`) is dropped for
+    either button, not queued. The firmware has no notion of what a press
+    *does* — it never calls the backend itself.
   - Flutter (`main.dart` / `api_client.dart`): a 1s `Timer.periodic` calls
-    `fetchEsp32ButtonPressCount()`; on any increase while idle on the
-    camera screen, it invokes `_onCaptureImageClicked()` — the exact same
-    handler the on-screen button uses, not a second implementation.
+    `fetchEsp32ButtonPressCounts()` (returns a `ButtonPressCounts { left,
+    right }`); on an increase, `_onLeftButtonPressed()` /
+    `_onRightButtonPressed()` dispatch via a `switch` on the current
+    `_screen` to whatever `_buildControls()` shows on that side:
+    camera (left=Capture Image, right=Select Image), captured
+    (left=Confirm, right=Close/Retake), translated (left=Save,
+    right=Close/Restart), processing (both no-ops — no buttons shown).
+    If both counters advance in the same poll, left wins and right is
+    picked up on the next poll.
   - Also uncommitted: `wireless_mvp/frontend/analysis_options.yaml`
     (excludes `build/**`, `web/**` from analysis) and a `pubspec.lock`
     bump.
   - `laptop_mvp/src/ui/test_gpio_buttons.py` shows as modified in
     `git status` but has an empty `git diff` — likely a line-ending/mode
     change only; verify before committing.
-  - This has not yet been confirmed against real hardware (per the
-    firmware comments) — next step is likely a physical bring-up test.
+  - See `wireless_mvp/PROJECT_NOTEBOOK.md` (2026-09-15 entry) for the
+    detailed change log. Next step: hardware bring-up test of the new
+    GPIO41 right button, then a full click-through of all four screens
+    with both physical buttons.
 
 ## Known gaps / TODO
 

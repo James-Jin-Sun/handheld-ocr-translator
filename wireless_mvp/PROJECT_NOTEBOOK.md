@@ -6,6 +6,46 @@ wireless capture) is in the top-level
 [`../PROJECT_NOTEBOOK.md`](../PROJECT_NOTEBOOK.md). New entries for this
 subproject go here going forward.
 
+## 2026-09-15 -- Generalized the physical capture button into left/right UI buttons
+
+- Hardware test confirmed GPIO21 works with the ESP32's **internal**
+  pull-up (`INPUT_PULLUP`) instead of the external pull-up originally
+  assumed; switched to `INPUT_PULLUP` for good.
+- Added a second physical button on **GPIO41**. The two buttons are no
+  longer capture-specific: GPIO21 = "left", GPIO41 = "right", and each
+  just increments its own debounced press counter -- the firmware has no
+  notion of what a press *does* anymore.
+  - `firmware/esp32_camera/src/main.cpp`: replaced the single-button
+    globals with a `DebouncedButton` struct (`pin`, `pressCount`,
+    debounce state) instantiated once per button; `pollButton()` /
+    `pollButtons()` replace the old `pollCaptureButton()`. `GET /status`
+    now returns `{"status":"ok","left_button_count":N,"right_button_count":N}`
+    instead of `button_capture_count`.
+- Flutter now maps each physical button to whatever on-screen action
+  currently occupies that side of the UI for the active screen, matching
+  `_buildControls()`'s existing left/right layout, instead of only ever
+  triggering "Capture Image":
+  - camera: left -> Capture Image, right -> Select Image
+  - captured: left -> Confirm, right -> Close/Retake
+  - translated: left -> Save, right -> Close/Restart
+  - processing: both are no-ops (no buttons shown on that screen)
+  - `frontend/lib/api_client.dart`: `fetchEsp32ButtonPressCount()` ->
+    `fetchEsp32ButtonPressCounts()`, returning a new `ButtonPressCounts`
+    model (`models.dart`) instead of a bare `int`.
+  - `frontend/lib/main.dart`: `_pollPhysicalButton()` ->
+    `_pollPhysicalButtons()`, tracking both counters and dispatching to
+    new `_onLeftButtonPressed()` / `_onRightButtonPressed()` methods
+    (one `switch` on `_screen` each, mirroring `_buildControls()`). If
+    both counters advance in the same 1s poll, left is handled first and
+    right is picked up on the next poll rather than firing both at once.
+
+### Next Steps
+
+- Physical bring-up test of the new GPIO41 right button (only GPIO21 has
+  been hardware-tested so far).
+- Confirm both buttons behave correctly through all four screens on real
+  hardware, not just by inspection.
+
 ## 2026-09-08 -- Restructured `wireless_mvp/src` into `wireless_mvp/backend`
 
 - Moved `src/main.py`, `src/api/`, `src/ocr/`, `src/overlay/`, `src/translation/`

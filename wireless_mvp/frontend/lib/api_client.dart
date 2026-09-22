@@ -115,10 +115,11 @@ class OcrApiClient {
 
   /// Polls the ESP32's own `GET /status` directly (bypassing the backend --
   /// the only direct Flutter<->ESP32 traffic in this app) purely to read
-  /// `button_capture_count`, which the physical GPIO21 button increments.
-  /// No image bytes, OCR results, or credentials ever cross this call.
-  /// Returns null on any network/parse failure (treated as "no change").
-  Future<int?> fetchEsp32ButtonPressCount(String esp32Url) async {
+  /// `left_button_count`/`right_button_count`, incremented by the physical
+  /// GPIO21 (left) / GPIO41 (right) push buttons. No image bytes, OCR
+  /// results, or credentials ever cross this call. Returns null on any
+  /// network/parse failure (treated as "no change").
+  Future<ButtonPressCounts?> fetchEsp32ButtonPressCounts(String esp32Url) async {
     final trimmed = esp32Url.trim();
     if (trimmed.isEmpty) return null;
     try {
@@ -127,8 +128,11 @@ class OcrApiClient {
           .timeout(const Duration(seconds: 3));
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body);
-      final count = data is Map ? data['button_capture_count'] : null;
-      return count is int ? count : null;
+      if (data is! Map) return null;
+      final left = data['left_button_count'];
+      final right = data['right_button_count'];
+      if (left is! int || right is! int) return null;
+      return ButtonPressCounts(left: left, right: right);
     } catch (_) {
       return null;
     }

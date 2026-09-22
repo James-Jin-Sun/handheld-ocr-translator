@@ -49,8 +49,8 @@ update it after nontrivial changes, following its existing entry format.
   `text_cleaning.py` are used by the live pipeline (`app/main.py`) — the
   rest is inert unless a task is specifically about OCR-engine evaluation.
 - Check `git status`/`git diff` before starting: this repo often has
-  in-progress, uncommitted work (e.g. the ESP32 GPIO21 capture-button
-  feature) that isn't reflected in the last commit.
+  in-progress, uncommitted work (e.g. the ESP32 GPIO21/GPIO41 left/right
+  physical button feature) that isn't reflected in the last commit.
 - Don't assume filenames/ports/IPs/endpoints from prose descriptions —
   verify against the actual code, which sometimes lags or diverges from
   written docs.

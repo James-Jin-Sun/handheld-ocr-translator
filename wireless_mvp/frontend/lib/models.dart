@@ -42,6 +42,16 @@ class TranslatedBlock {
   }
 }
 
+/// `left_button_count`/`right_button_count` from the ESP32's `GET /status`
+/// (see wireless_mvp/firmware/esp32_camera/src/main.cpp), incremented by
+/// the physical GPIO21 (left) / GPIO41 (right) push buttons.
+class ButtonPressCounts {
+  ButtonPressCounts({required this.left, required this.right});
+
+  final int left;
+  final int right;
+}
+
 class Manifest {
   Manifest({required this.ocrEngine, required this.targetLanguage, required this.blocks});
 
